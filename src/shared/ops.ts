@@ -32,6 +32,7 @@ export function newTab(s: AppState, o: NewTabOpts): ID {
     lastActiveAt: o.now,
   };
   s.items[id] = tab;
+  recordVisit(s, o.url, tab.title, o.now);
   const spaceId = o.spaceId ?? s.activeSpaceId;
   const list = o.list ?? 'today';
   if (list !== 'today') tab.homeUrl = o.url;
@@ -98,13 +99,18 @@ export function activeTab(s: AppState): TabItem | null {
 export function updateTab(s: AppState, id: ID, patch: Partial<Pick<TabItem, 'url' | 'title' | 'favicon'>>, now: number): void {
   const t = s.items[id];
   if (!t || t.kind !== 'tab') return;
-  if (patch.url !== undefined && patch.url !== t.url) {
-    t.url = patch.url;
-    if (patch.favicon === undefined && hostOf(patch.url) !== hostOf(t.url)) t.favicon = undefined;
+  const urlChanged = patch.url !== undefined && patch.url !== t.url;
+  if (urlChanged) {
+    if (patch.favicon === undefined && hostOf(patch.url!) !== hostOf(t.url)) t.favicon = undefined;
+    t.url = patch.url!;
   }
-  if (patch.title !== undefined && patch.title.trim()) t.title = patch.title;
+  if (patch.title !== undefined && patch.title.trim()) {
+    t.title = patch.title;
+    const h = s.history.find((x) => x.url === t.url);
+    if (h) h.title = patch.title;
+  }
   if (patch.favicon !== undefined) t.favicon = patch.favicon || undefined;
-  if (patch.url) recordVisit(s, patch.url, patch.title ?? t.title, now);
+  if (urlChanged) recordVisit(s, t.url, patch.title ?? t.title, now);
 }
 
 export function recordVisit(s: AppState, url: string, title: string, now: number): void {

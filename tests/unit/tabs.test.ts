@@ -75,10 +75,20 @@ describe('sidebar tabs', () => {
     [s] = run(s, (d) => updateTab(d, a, { url: 'https://a.com/x', title: 'X page', favicon: 'data:x' }, T0 + 5));
     const t = s.items[a];
     expect(t).toMatchObject({ url: 'https://a.com/x', title: 'X page', favicon: 'data:x' });
-    expect(s.history[0]).toMatchObject({ url: 'https://a.com/x', visits: 1 });
+    expect(s.history[0]).toMatchObject({ url: 'https://a.com/x', visits: 1, title: 'X page' });
+    expect(s.history[1]).toMatchObject({ url: 'https://a.com', visits: 1 }); // recorded when opened
     [s] = run(s, (d) => updateTab(d, a, { url: 'https://a.com/x' }, T0 + 6));
     [s] = run(s, (d) => updateTab(d, a, { title: '   ' }, T0 + 6));
     expect(s.items[a]).toMatchObject({ title: 'X page' });
+  });
+
+  it('a page counts as one visit even when the page reports its URL again', () => {
+    let s = fresh();
+    let a: string;
+    [s, a] = run(s, (d) => newTab(d, { url: 'https://a.com', now: T0 }));
+    [s] = run(s, (d) => updateTab(d, a, { url: 'https://a.com', title: 'A' }, T0 + 1));
+    expect(s.history).toHaveLength(1);
+    expect(s.history[0]).toMatchObject({ visits: 1, title: 'A' });
   });
 
   it('renames tabs with a custom title that can be cleared', () => {
