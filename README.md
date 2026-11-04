@@ -50,6 +50,7 @@ cookies or history.
 | **Little window** | Small quick window (⌘⌥N, works even when Kite is in the background); “Open in Kite” moves the page into a Space |
 | **Boosts** | Per-site CSS, font, zap (click to hide anything), optional script; live while you type; import/export |
 | **Link routing** | Rules for links from other apps: site → Space or little window; try-a-link preview |
+| **Video pop-out** | Switch tabs or apps while a video plays and it floats in a window you can drag and resize anywhere on screen; come back and it returns to the page. Speaker icon on playing tabs (click to mute); ⌘⇧P by hand; switches in Settings |
 | **Notes** | Rich text in the sidebar: headings, lists, to-dos, quotes, code, links; Markdown export |
 | **Customise** | Sidebar side, spacing, 4 fonts, text size, sidebar width, corners, page margin, favorites per row, reduce motion, your own CSS for Kite, every shortcut re-recordable |
 | **Your data** | One JSON file, saved safely (flushed, atomic, last-save backup + 7 daily copies); back up / restore |
@@ -79,15 +80,16 @@ browser profiles, extensions.
 | ⌘Y | Archive | ⌘, | Settings |
 | ⌘1…⌘9 | Go to tab | ⌃1…⌃9 | Go to Space |
 | ⌘⌥→ / ← | Next / previous Space | ⌘F | Find in page |
+| ⌘⇧P | Pop out / bring back video | | |
 
 ---
 
 ## Tests
 
 ```bash
-npm test               # 177 logic tests (Vitest)
-npm run test:e2e       # 132 UI tests (Playwright, simulated pages)
-npm run test:electron  # 16 tests in real Electron, incl. 5 security attack tests
+npm test               # 184 logic tests (Vitest)
+npm run test:e2e       # 139 UI tests (Playwright, simulated pages)
+npm run test:electron  # 19 tests in real Electron, incl. 5 security attack tests and a real playing video
 npm run test:all       # everything + type check
 ```
 
@@ -102,7 +104,7 @@ the **same** injected scripts as the real app (link catcher, Boosts, zap picker)
 src/
   shared/     pure logic, no UI — the state model and every action (fully unit-tested)
     types.ts  ops.ts  tree.ts  folders.ts  spaces.ts  split.ts  archive.ts
-    commandbar.ts  links.ts  boosts.ts  zap.ts  routing.ts  notes.ts
+    commandbar.ts  links.ts  boosts.ts  zap.ts  routing.ts  notes.ts  pip.ts
     arcImport.ts  settings.ts  persistence.ts  shortcuts.ts  url.ts
   main/       Electron main process — windows, saving, permissions, page security
   renderer/   React UI — sidebar, page area, panels, little window

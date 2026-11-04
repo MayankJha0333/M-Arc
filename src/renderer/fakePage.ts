@@ -42,6 +42,7 @@ export function fakePageHtml(url: string): string {
     <li><a id="blank" href="https://newtab.test/" target="_blank">Opens in a new tab</a></li>
   </ul>
   <div id="ad" class="banner">Sponsored banner</div>
+  <video id="vid" width="320" height="180" style="background:#222;border-radius:8px"></video>
   <p data-url="${escapeHtml(url)}">${escapeHtml(url)}</p>
 </main></body></html>`;
 }

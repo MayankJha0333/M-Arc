@@ -38,6 +38,8 @@ export const ACTION_CATALOG: ActionDef[] = [
   { id: 'findInPage', title: 'Find in Page', keywords: 'search' },
   { id: 'reload', title: 'Reload Page', keywords: 'refresh' },
   { id: 'unsplit', title: 'Separate Split View', keywords: 'unsplit' },
+  { id: 'popOutVideo', title: 'Pop Out Video', keywords: 'picture in picture pip floating player' },
+  { id: 'toggleMute', title: 'Mute / Unmute Tab', keywords: 'sound audio silence' },
 ];
 
 export type Suggestion =

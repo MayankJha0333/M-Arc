@@ -45,6 +45,9 @@ export function openUrl(input: string, where: OpenWhere = 'new', opts: { spaceId
   return id;
 }
 
+/** Filled in by pipRuntime (kept separate to avoid an import loop). */
+export const pipHooks = { toggle: async () => undefined as void, mute: () => undefined as void };
+
 let boostHook: () => void = () => setUi({ panel: 'boosts' });
 export function setBoostHook(fn: () => void) {
   boostHook = fn;
@@ -257,6 +260,8 @@ export const actions: Record<string, () => void> = {
   closePeek: () => closePeekHook(),
   littleWindow: () => bridge.openLittle('kite://new'),
   boostEditor: () => boostHook(),
+  popOutVideo: () => void pipHooks.toggle(),
+  toggleMute: () => pipHooks.mute(),
   newNote: () => void act((d) => createNote(d, { now: now() })),
   boostsPanel: () => setUi({ panel: 'boosts' }),
   routingPanel: () => setUi({ panel: 'routing' }),

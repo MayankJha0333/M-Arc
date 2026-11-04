@@ -1,5 +1,8 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import { X, Undo2, Loader2, StickyNote, Columns2, Folder, FolderOpen } from 'lucide-react';
+import { X, Undo2, Loader2, StickyNote, Columns2, Folder, FolderOpen, Volume2, VolumeX, PictureInPicture2 } from 'lucide-react';
+import { toggleMute } from '../pipRuntime';
+
+const shallowEq = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 import type { ID, Item, ListName } from '@shared/types';
 import { displayTitle } from '@shared/ops';
 import { act, setUi, useKite } from '../store';
@@ -24,6 +27,12 @@ export const ItemRow = memo(function ItemRow({ id, list, depth }: Props) {
   const loading = useKite((st) => !!st.ui.loading[id]);
   const renaming = useKite((st) => st.ui.renaming === id);
   const closeOnHover = useKite((st) => st.s.settings.showTabCloseOnHover);
+  const sound = useKite((st) => {
+    const it = st.s.items[id];
+    const tabs = !it ? [] : it.kind === 'tab' ? [id] : it.kind === 'split' ? it.panes : [];
+    const playingTab = tabs.find((t) => st.ui.playing[t]);
+    return playingTab ? { tab: playingTab, muted: !!st.ui.muted[playingTab], pipped: st.ui.pipped.includes(playingTab) } : null;
+  }, shallowEq);
   const drag = useDragRow(id, item?.kind === 'folder');
   const liveTitle = useKite((st) => {
     const it = st.s.items[id];
@@ -65,6 +74,21 @@ export const ItemRow = memo(function ItemRow({ id, list, depth }: Props) {
         </span>
       )}
       {loading && <Loader2 size={13} className="spin row-status" aria-label="Loading" />}
+      {sound && (
+        <button
+          className="row-sound"
+          data-testid={`sound-${id}`}
+          data-muted={sound.muted || undefined}
+          title={sound.pipped ? 'Playing in a floating window — click to mute' : sound.muted ? 'Unmute' : 'Mute'}
+          aria-label={sound.muted ? 'Unmute' : 'Mute'}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleMute(sound.tab);
+          }}
+        >
+          {sound.muted ? <VolumeX size={13} /> : sound.pipped ? <PictureInPicture2 size={13} /> : <Volume2 size={13} />}
+        </button>
+      )}
       {awayFromHome && (
         <button
           className="row-btn"

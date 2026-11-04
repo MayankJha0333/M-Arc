@@ -219,6 +219,7 @@ Every feature in §3 was rebuilt from these notes, written fresh. See README.md 
 | Boosts | ✅ | CSS, font, zap, script; sharing by file (scripts never shared) |
 | Link routing | ✅ | Rules → Space / little window / current Space |
 | Notes | ✅ | Rich text, Markdown export |
+| Auto picture-in-picture (`PictureInPicture`, `disableAutoPipGlobally` in §1) | ✅ | Pops out on tab or app switch, returns when you come back; mute from the sidebar |
 | Arc import | ✅ | Reads `StorableSidebar.json` (both layouts in §2a); Arc note text isn't readable, so notes import by title |
 | Easels, Live Folders, sync, profiles, AI | ❌ | Left out on purpose (online-only or out of scope) |
 

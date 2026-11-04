@@ -19,6 +19,10 @@ export interface SurfaceHandle {
   removeCSS(key: string): Promise<void>;
   webContentsId(): number | null;
   focus(): void;
+  /** Pop the playing video out into a floating window. True if one popped out. */
+  popOutVideo(): Promise<boolean>;
+  returnVideo(): Promise<void>;
+  setMuted(muted: boolean): void;
 }
 
 const surfaces = new Map<ID, SurfaceHandle>();

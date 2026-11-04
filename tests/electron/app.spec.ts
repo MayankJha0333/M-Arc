@@ -264,3 +264,53 @@ test('security: Kite’s private API only answers Kite’s own UI', async () => 
   await expect(win.getByTestId('sidebar')).toBeVisible();
   await app.close();
 });
+
+test('video pop-out: a real playing video floats when you switch tabs or apps, and comes back', async () => {
+  const { app, win } = await launch();
+  await open(win, site.url('/video'));
+  await expect(win.locator('[data-title="Video Page"]')).toHaveCount(1, { timeout: 15000 });
+  const videoPage = () =>
+    app.evaluate(async ({ webContents }) => {
+      const wc = webContents.getAllWebContents().find((w) => w.getType() === 'webview' && w.getURL().includes('/video'));
+      return wc ? wc.executeJavaScript('!!document.pictureInPictureElement') : null;
+    });
+  // Kite sees the video playing
+  await expect(win.locator('[data-title="Video Page"] [data-testid^="sound-"]')).toBeVisible({ timeout: 10000 });
+  // Switch tabs -> floating window
+  await open(win, site.url('/two'));
+  await expect.poll(videoPage, { timeout: 10000 }).toBe(true);
+  // Back -> returns to the page
+  await win.locator('[data-title="Video Page"]').click();
+  await expect.poll(videoPage, { timeout: 10000 }).toBe(false);
+  // Switch to another app (Kite's window loses focus) -> floating window; focus back -> returns
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('window-focus', false));
+  await expect.poll(videoPage, { timeout: 10000 }).toBe(true);
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('window-focus', true));
+  await expect.poll(videoPage, { timeout: 10000 }).toBe(false);
+  await app.close();
+});
+
+test('video pop-out: another app’s window taking focus really triggers it', async () => {
+  const { app, win } = await launch();
+  await open(win, site.url('/video'));
+  await expect(win.locator('[data-title="Video Page"] [data-testid^="sound-"]')).toBeVisible({ timeout: 15000 });
+  const inPip = () =>
+    app.evaluate(async ({ webContents }) => {
+      const wc = webContents.getAllWebContents().find((w) => w.getType() === 'webview' && w.getURL().includes('/video'));
+      return wc ? wc.executeJavaScript('!!document.pictureInPictureElement') : null;
+    });
+  // A window Kite doesn't own stands in for another app.
+  await app.evaluate(({ BrowserWindow }) => {
+    const other = new BrowserWindow({ width: 300, height: 200, show: true, title: 'Other app' });
+    other.loadURL('about:blank');
+    other.focus();
+    (globalThis as any).other = other;
+  });
+  await expect.poll(inPip, { timeout: 10000 }).toBe(true);
+  await app.evaluate(({ BrowserWindow }) => {
+    (globalThis as any).other.close();
+    BrowserWindow.getAllWindows().find((w) => w.getTitle() !== 'Other app')!.focus();
+  });
+  await expect.poll(inPip, { timeout: 10000 }).toBe(false);
+  await app.close();
+});

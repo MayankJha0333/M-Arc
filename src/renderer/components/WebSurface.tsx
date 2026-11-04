@@ -18,6 +18,8 @@ export interface SurfaceEvents {
   onReady(handle: SurfaceHandle, url: string): void;
   onFocus?(): void;
   onEscape?(): void;
+  /** A video or sound started (true) or stopped (false). */
+  onMedia?(playing: boolean): void;
 }
 
 interface Props extends SurfaceEvents {
@@ -68,6 +70,11 @@ function ElectronSurface({ id, initialUrl, visible, ...ev }: Props) {
       removeCSS: (key) => wv.removeInsertedCSS(key),
       webContentsId: () => wcId,
       focus: () => wv.focus(),
+      popOutVideo: async () => (wcId === null ? false : bridge.pipEnter(wcId)),
+      returnVideo: async () => {
+        if (wcId !== null) await bridge.pipExit(wcId);
+      },
+      setMuted: (m) => wv.setAudioMuted(m),
     };
     const unregister = registerSurface(id, handle);
     const onReady = () => {
@@ -98,6 +105,10 @@ function ElectronSurface({ id, initialUrl, visible, ...ev }: Props) {
       if (m) evRef.current.onLink(m.decision as 'peek' | 'little', m.url);
     };
     const onFocus = () => evRef.current.onFocus?.();
+    const onPlay = () => evRef.current.onMedia?.(true);
+    const onPause = () => evRef.current.onMedia?.(false);
+    wv.addEventListener('media-started-playing', onPlay);
+    wv.addEventListener('media-paused', onPause);
     wv.addEventListener('dom-ready', onReady);
     wv.addEventListener('did-navigate', onNavigate);
     wv.addEventListener('did-navigate-in-page', onInPage);
@@ -119,6 +130,8 @@ function ElectronSurface({ id, initialUrl, visible, ...ev }: Props) {
       wv.removeEventListener('did-stop-loading', onStop);
       wv.removeEventListener('console-message', onConsole);
       wv.removeEventListener('focus', onFocus);
+      wv.removeEventListener('media-started-playing', onPlay);
+      wv.removeEventListener('media-paused', onPause);
     };
   }, [id]);
 
@@ -217,6 +230,22 @@ function SimulatedSurface({ id, initialUrl, visible, ...ev }: Props) {
       },
       webContentsId: () => null,
       focus: () => frame.contentWindow?.focus(),
+      // Test pages have a <video id="vid">; tests mark it playing with data-playing.
+      popOutVideo: async () => {
+        const doc = frame.contentDocument;
+        const vid = doc?.getElementById('vid');
+        if (!doc || vid?.dataset.playing !== '1') return false;
+        doc.body.dataset.pip = '1';
+        return true;
+      },
+      returnVideo: async () => {
+        const doc = frame.contentDocument;
+        if (doc) delete doc.body.dataset.pip;
+      },
+      setMuted: (m) => {
+        const doc = frame.contentDocument;
+        if (doc) doc.body.dataset.muted = m ? '1' : '0';
+      },
     };
     const unregister = registerSurface(id, handle);
     const onLoad = () => {
@@ -251,6 +280,8 @@ function SimulatedSurface({ id, initialUrl, visible, ...ev }: Props) {
         window.dispatchEvent(copy);
         if (copy.defaultPrevented) e.preventDefault();
       });
+      doc.addEventListener('play', () => evRef.current.onMedia?.(true), true);
+      doc.addEventListener('pause', () => evRef.current.onMedia?.(false), true);
       doc.addEventListener('focusin', () => evRef.current.onFocus?.());
       doc.addEventListener('mousedown', () => evRef.current.onFocus?.());
       evRef.current.onNavigate(url);

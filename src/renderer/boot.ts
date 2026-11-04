@@ -10,6 +10,7 @@ import { getS, getUi, markLoaded, startAutosave, useKite } from './store';
 import { openUrl, runAction, autoArchiveNow, openInSplit } from './commands';
 import { handleOpenRequest, handleExternalUrl } from './routingRuntime';
 import { watchBoosts } from './boostRuntime';
+import { startPip } from './pipRuntime';
 
 /** All shortcuts including the numbered ones (⌘1…⌘9, ⌃1…⌃9). */
 export function fullShortcutMap(settings: Settings): Record<string, string> {
@@ -31,6 +32,7 @@ export async function boot() {
   useKite.getState().load(state);
   startAutosave();
   watchBoosts();
+  startPip();
   const active = ops.activeItemId(state);
   if (active) {
     const it = state.items[active];

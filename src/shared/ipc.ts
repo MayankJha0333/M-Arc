@@ -24,6 +24,11 @@ export interface KiteBridge {
   unregisterPage(webContentsId: number): void;
   /** Run Kite's helper code in a page, in a world the page's own scripts can't see. */
   execIsolated(webContentsId: number, code: string): Promise<unknown>;
+  /** Pop a page's playing video out into a floating window. Resolves true if one popped out. */
+  pipEnter(webContentsId: number): Promise<boolean>;
+  pipExit(webContentsId: number): Promise<void>;
+  /** Fires false when you switch to another app, true when Kite is back in front. */
+  onWindowFocus(cb: (focused: boolean) => void): () => void;
   setShortcuts(shortcuts: Record<string, string>, littleHotkey: string): void;
   onShortcut(cb: (action: string) => void): () => void;
   onOpen(cb: (req: OpenRequest) => void): () => void;

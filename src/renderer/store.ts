@@ -43,6 +43,11 @@ export interface UiState {
   sidebarPeek: boolean; // hidden sidebar temporarily shown by hovering the edge
   findOpen: boolean;
   zapping: boolean;
+  /** Tabs with a video or sound playing right now. */
+  playing: Record<ID, boolean>;
+  muted: Record<ID, boolean>;
+  /** Tabs whose video Kite popped out automatically. */
+  pipped: ID[];
 }
 
 interface Store {
@@ -72,6 +77,9 @@ export const useKite = create<Store>((set, get) => ({
     sidebarPeek: false,
     findOpen: false,
     zapping: false,
+    playing: {},
+    muted: {},
+    pipped: [],
   },
   act(fn) {
     let out: ReturnType<typeof fn> | undefined;

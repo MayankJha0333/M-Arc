@@ -35,6 +35,8 @@ export interface TestHooks {
   exported: { name: string; text: string }[];
   arcFileText: string | null;
   now: number | null;
+  /** Simulate switching to another app (false) and back (true). */
+  windowFocus(focused: boolean): void;
 }
 
 const STORAGE_KEY = 'kite-state';
@@ -46,6 +48,7 @@ function makeWebBridge(): KiteBridge {
   const split = new Emitter<{ url: string; sourceTabId: string }>();
   const littleToMain = new Emitter<{ url: string; spaceId: string | null }>();
   const littleArchived = new Emitter<{ url: string; title: string }>();
+  const windowFocus = new Emitter<boolean>();
   const hooks: TestHooks = {
     externalUrl: (u) => external.emit(u),
     shortcut: (a) => shortcut.emit(a),
@@ -57,6 +60,7 @@ function makeWebBridge(): KiteBridge {
     exported: [],
     arcFileText: null,
     now: null,
+    windowFocus: (f) => windowFocus.emit(f),
   };
   window.__kiteTest = hooks;
   const platformName = /Mac/i.test(navigator.platform) ? 'darwin' : 'linux';
@@ -75,6 +79,9 @@ function makeWebBridge(): KiteBridge {
       return true;
     },
     execIsolated: async () => null,
+    pipEnter: async () => false,
+    pipExit: async () => undefined,
+    onWindowFocus: (cb) => windowFocus.on(cb),
     registerPage() {},
     unregisterPage() {},
     setShortcuts() {},

@@ -154,6 +154,12 @@ function TabsSection() {
         <label className="field-inline"><Toggle checked={st.peekOnShiftClick} onChange={(v) => set({ peekOnShiftClick: v })} testId="set-peek-shift" label="Shift-click Peek" /> Shift-click a link to Peek</label>
         <label className="field-inline"><Toggle checked={st.tidyTitles} onChange={(v) => set({ tidyTitles: v })} testId="set-tidy" label="Tidy titles" /> Shorten titles when pinning (“Inbox – Gmail” → “Inbox”)</label>
       </div>
+      <Field label="Videos" hint="The floating window can be moved and resized anywhere on screen">
+        <div className="settings-toggles">
+          <label className="field-inline"><Toggle checked={st.autoPip} onChange={(v) => set({ autoPip: v })} testId="set-autopip" label="Pop out videos" /> Pop out a playing video when you switch tabs</label>
+          <label className="field-inline" data-off={!st.autoPip || undefined}><Toggle checked={st.autoPip && st.autoPipOnAppSwitch} onChange={(v) => set({ autoPipOnAppSwitch: v })} testId="set-autopip-app" label="Also when switching apps" /> …and when you switch to another app</label>
+        </div>
+      </Field>
       <button className="btn small" data-testid="set-clear-history" onClick={() => { act(clearHistory); toast('History cleared'); }}>
         Clear browsing history
       </button>

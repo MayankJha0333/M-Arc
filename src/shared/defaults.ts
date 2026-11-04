@@ -43,6 +43,7 @@ export const DEFAULT_SHORTCUTS: Record<string, string> = {
   findInPage: 'mod+f',
   zoomIn: 'mod+=',
   zoomOut: 'mod+-',
+  popOutVideo: 'mod+shift+p',
 };
 
 export const SHORTCUT_LABELS: Record<string, string> = {
@@ -70,6 +71,7 @@ export const SHORTCUT_LABELS: Record<string, string> = {
   findInPage: 'Find in page',
   zoomIn: 'Zoom in',
   zoomOut: 'Zoom out',
+  popOutVideo: 'Pop out / bring back video',
 };
 
 export const SEARCH_ENGINES: { label: string; template: string }[] = [
@@ -101,6 +103,8 @@ export function defaultSettings(): Settings {
     externalLinksTarget: 'little',
     littleHotkey: 'mod+alt+n',
     boostsEnabled: true,
+    autoPip: true,
+    autoPipOnAppSwitch: true,
     shortcuts: { ...DEFAULT_SHORTCUTS },
     chromeCss: '',
     reduceMotion: false,

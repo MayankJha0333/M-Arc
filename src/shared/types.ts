@@ -155,6 +155,10 @@ export interface Settings {
   externalLinksTarget: 'little' | 'active';
   littleHotkey: string;
   boostsEnabled: boolean;
+  /** Pop playing videos out into a floating window when you switch tabs. */
+  autoPip: boolean;
+  /** …and when you switch to another app. */
+  autoPipOnAppSwitch: boolean;
   shortcuts: Record<string, string>;
   /** Extra CSS the user writes to restyle Kite itself. */
   chromeCss: string;

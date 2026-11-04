@@ -11,6 +11,19 @@ export function startSite(): Promise<{ server: Server; url: (path?: string) => s
     const host = req.headers.host ?? '';
     res.setHeader('content-type', 'text/html');
     if (req.url?.startsWith('/two')) return res.end(page('Page Two', '<h1 id="h">Two</h1>'));
+    if (req.url?.startsWith('/video'))
+      return res.end(
+        page(
+          'Video Page',
+          `<canvas id="c" width="640" height="360" style="display:none"></canvas>
+           <video id="v" width="640" height="360" muted autoplay playsinline></video>
+           <script>
+             const c = document.getElementById('c'), x = c.getContext('2d'); let t = 0;
+             setInterval(() => { x.fillStyle = 'hsl(' + (t++ * 7 % 360) + ' 70% 50%)'; x.fillRect(0, 0, 640, 360); }, 40);
+             const v = document.getElementById('v'); v.srcObject = c.captureStream(25); v.play();
+           </script>`,
+        ),
+      );
     if (req.url?.startsWith('/article')) return res.end(page(`Article on ${host}`, '<h1 id="h">Article</h1>'));
     res.end(
       page(

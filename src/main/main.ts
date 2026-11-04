@@ -23,6 +23,7 @@ import { Storage } from './storage';
 import { findAction, toAccelerator } from '../shared/shortcuts';
 import { hostOf } from '../shared/url';
 import type { OpenRequest } from '../shared/ipc';
+import { PIP_ENTER_SCRIPT, PIP_EXIT_SCRIPT } from '../shared/pip';
 
 const isMac = process.platform === 'darwin';
 const devUrl = process.env.KITE_DEV_URL;
@@ -93,7 +94,20 @@ function createMainWindow(): BrowserWindow {
   win.webContents.on('did-finish-load', () => {
     while (pendingExternal.length) win.webContents.send('external-url', pendingExternal.shift());
   });
+  // Tell the UI when you switch to another app (for auto picture-in-picture).
+  // Switching to one of Kite's own windows (a little window, a dialog) doesn't count.
+  win.on('blur', () =>
+    setTimeout(() => {
+      const f = BrowserWindow.getFocusedWindow();
+      if (!win.isDestroyed() && (!f || !isKiteWindow(f))) win.webContents.send('window-focus', false);
+    }, 60),
+  );
+  win.on('focus', () => win.webContents.send('window-focus', true));
   return win;
+}
+
+function isKiteWindow(w: BrowserWindow) {
+  return w === mainWindow || littleWindows.has(w);
 }
 
 // A page could try to open endless windows; allow a few per few seconds.
@@ -364,6 +378,33 @@ function setupIpc() {
     if (!page || page.host !== e.sender) throw new Error('Unknown page');
     const wc = allWebContents.fromId(id);
     return wc ? wc.executeJavaScriptInIsolatedWorld(1999, [{ code }]) : null;
+  });
+  // Picture-in-picture: try the page and every frame inside it (embedded players).
+  // Runs as if you clicked, because browsers only allow this after a user action.
+  handle('pip:enter', async (e, id: number) => {
+    const page = pages.get(id);
+    const wc = allWebContents.fromId(id);
+    if (!page || page.host !== e.sender || !wc) return false;
+    for (const frame of wc.mainFrame.framesInSubtree) {
+      try {
+        if (await frame.executeJavaScript(PIP_ENTER_SCRIPT, true)) return true;
+      } catch {
+        /* frame went away */
+      }
+    }
+    return false;
+  });
+  handle('pip:exit', async (e, id: number) => {
+    const page = pages.get(id);
+    const wc = allWebContents.fromId(id);
+    if (!page || page.host !== e.sender || !wc) return;
+    for (const frame of wc.mainFrame.framesInSubtree) {
+      try {
+        await frame.executeJavaScript(PIP_EXIT_SCRIPT, true);
+      } catch {
+        /* ignore */
+      }
+    }
   });
   on('shortcuts:set', (_e, map: Record<string, string>, hotkey: string) => {
     shortcuts = map;
