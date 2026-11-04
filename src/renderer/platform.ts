@@ -2,6 +2,7 @@
 // In test mode (no Electron), saving uses localStorage and web pages are simulated.
 
 import type { KiteBridge, OpenRequest } from '@shared/ipc';
+import { surface } from './surfaces';
 
 declare global {
   interface Window {
@@ -48,7 +49,27 @@ function makeWebBridge(): KiteBridge {
   const split = new Emitter<{ url: string; sourceTabId: string }>();
   const littleToMain = new Emitter<{ url: string; spaceId: string | null }>();
   const littleArchived = new Emitter<{ url: string; title: string }>();
-  const windowFocus = new Emitter<boolean>();
+  const pipState = new Emitter<{ tabId: string; popped: boolean }>();
+  // Mirrors the main process: on leaving the app, pop out the first target that has a playing video.
+  let pipTargets: string[] = [];
+  let pipLeft: string | null = null;
+  const windowFocus = async (focused: boolean) => {
+    if (!focused) {
+      if (pipLeft) return;
+      for (const id of pipTargets) {
+        if (await surface(id)?.popOutVideo()) {
+          pipLeft = id;
+          pipState.emit({ tabId: id, popped: true });
+          return;
+        }
+      }
+    } else if (pipLeft) {
+      const id = pipLeft;
+      pipLeft = null;
+      await surface(id)?.returnVideo();
+      pipState.emit({ tabId: id, popped: false });
+    }
+  };
   const hooks: TestHooks = {
     externalUrl: (u) => external.emit(u),
     shortcut: (a) => shortcut.emit(a),
@@ -60,7 +81,7 @@ function makeWebBridge(): KiteBridge {
     exported: [],
     arcFileText: null,
     now: null,
-    windowFocus: (f) => windowFocus.emit(f),
+    windowFocus: (f) => void windowFocus(f),
   };
   window.__kiteTest = hooks;
   const platformName = /Mac/i.test(navigator.platform) ? 'darwin' : 'linux';
@@ -81,7 +102,10 @@ function makeWebBridge(): KiteBridge {
     execIsolated: async () => null,
     pipEnter: async () => false,
     pipExit: async () => undefined,
-    onWindowFocus: (cb) => windowFocus.on(cb),
+    setPipTargets: (ids) => {
+      pipTargets = [...ids];
+    },
+    onPipState: (cb) => pipState.on(cb),
     registerPage() {},
     unregisterPage() {},
     setShortcuts() {},

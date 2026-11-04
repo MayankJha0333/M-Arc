@@ -1,7 +1,9 @@
-// Watches which pages are on screen and whether Kite is in front,
-// and pops playing videos out (or brings them back) automatically.
+// Pops playing videos out (or brings them back) automatically.
+// Tab switches are handled here. App switches are handled by the main process,
+// which must act the instant Kite stops being the active app (on macOS a covered
+// window soon counts as hidden), so this file only keeps it told which tabs to try.
 
-import { planOnAppBlur, planOnAppFocus, planOnSwitch, type PipPlan } from '@shared/pip';
+import { appSwitchTargets, planOnSwitch, type PipPlan } from '@shared/pip';
 import * as ops from '@shared/ops';
 import type { AppState, ID } from '@shared/types';
 import { getS, getUi, setUi, toast, useKite } from './store';
@@ -41,9 +43,18 @@ export function startPip() {
   started = true;
   let before = visibleTabs(getS());
   let focusedBefore = ops.activeTab(getS())?.id ?? null;
-  let appFocused = true;
+  let targets = '';
+
+  const syncTargets = (st: ReturnType<typeof useKite.getState>) => {
+    const next = appSwitchTargets(visibleTabs(st.s), st.s.settings, ops.activeTab(st.s)?.id);
+    if (next.join('|') !== targets) {
+      targets = next.join('|');
+      bridge.setPipTargets(next);
+    }
+  };
 
   useKite.subscribe((st) => {
+    syncTargets(st);
     const after = visibleTabs(st.s);
     const focusedNow = ops.activeTab(st.s)?.id ?? null;
     if (after.join('|') !== before.join('|')) {
@@ -56,13 +67,10 @@ export function startPip() {
       focusedBefore = focusedNow;
     }
   });
+  syncTargets(useKite.getState());
 
-  bridge.onWindowFocus((focused) => {
-    if (focused === appFocused) return;
-    appFocused = focused;
-    const st = useKite.getState();
-    const visible = visibleTabs(st.s);
-    void apply(focused ? planOnAppFocus(visible, st.ui.pipped) : planOnAppBlur(visible, st.ui.playing, st.s.settings, ops.activeTab(st.s)?.id));
+  bridge.onPipState(({ tabId, popped }) => {
+    setUi((u) => ({ pipped: popped ? [tabId] : u.pipped.filter((x) => x !== tabId) }));
   });
 }
 

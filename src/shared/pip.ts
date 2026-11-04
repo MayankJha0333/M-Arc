@@ -27,36 +27,40 @@ export function planOnSwitch(before: ID[], after: ID[], playing: Record<ID, bool
   return { enter, exit };
 }
 
-/** Kite lost focus to another app: pop out the visible playing video. */
-export function planOnAppBlur(visible: ID[], playing: Record<ID, boolean>, s: PipSettings, focused?: ID | null): PipPlan {
-  if (!s.autoPip || !s.autoPipOnAppSwitch) return { enter: null, exit: [] };
-  const candidates = visible.filter((id) => playing[id]);
-  const enter = focused && candidates.includes(focused) ? focused : candidates[0] ?? null;
-  return { enter, exit: [] };
-}
-
-/** Kite is back in front: bring videos we popped out of visible pages back. */
-export function planOnAppFocus(visible: ID[], popped: ID[]): PipPlan {
-  return { enter: null, exit: popped.filter((id) => visible.includes(id)) };
-}
-
 /**
  * Script run inside a page (and each of its frames) to pop out its main video.
  * Picks the largest playing video that has sound or is reasonably big, so
- * small muted autoplay ads don't pop out. Resolves true if a video popped out.
+ * small muted autoplay ads don't pop out.
+ * Resolves to a short status: 'ok', 'already', or why nothing popped out
+ * ('off', 'none', 'skipped …', 'error …') — written to the debug log.
  */
 export const PIP_ENTER_SCRIPT = `(async () => {
-  if (!document.pictureInPictureEnabled) return false;
-  if (document.pictureInPictureElement) return true;
-  const vids = Array.from(document.querySelectorAll('video')).filter((v) =>
+  if (!document.pictureInPictureEnabled) return 'off';
+  if (document.pictureInPictureElement) return 'already';
+  const all = Array.from(document.querySelectorAll('video'));
+  if (!all.length) return 'none';
+  const vids = all.filter((v) =>
     !v.paused && !v.ended && v.readyState >= 2 && v.videoWidth > 0 && !v.disablePictureInPicture &&
     ((!v.muted && v.volume > 0) || v.clientWidth >= 480));
-  if (!vids.length) return false;
+  if (!vids.length) return 'skipped ' + all.map((v) => (v.paused ? 'paused' : 'playing') + '/' + v.readyState + '/' + v.clientWidth + (v.muted ? '/muted' : '')).join(',');
   vids.sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight);
-  try { await vids[0].requestPictureInPicture(); return true; } catch (e) { return false; }
+  try { await vids[0].requestPictureInPicture(); return 'ok'; } catch (e) { return 'error ' + (e && e.name) + ': ' + (e && e.message); }
 })()`;
+
+/** True when a status from PIP_ENTER_SCRIPT means a video is floating. */
+export const pipPopped = (status: unknown) => status === 'ok' || status === 'already';
 
 export const PIP_EXIT_SCRIPT = `(async () => {
   if (document.pictureInPictureElement) { try { await document.exitPictureInPicture(); } catch (e) {} return true; }
   return false;
 })()`;
+
+/**
+ * Pages Kite should try to pop a video out of when you switch to another app,
+ * best first (the focused pane). The main process acts on this list the moment
+ * Kite stops being the active app, without asking the UI first.
+ */
+export function appSwitchTargets(visible: ID[], s: PipSettings, focused?: ID | null): ID[] {
+  if (!s.autoPip || !s.autoPipOnAppSwitch) return [];
+  return focused && visible.includes(focused) ? [focused, ...visible.filter((id) => id !== focused)] : [...visible];
+}

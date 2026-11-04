@@ -16,14 +16,14 @@ import {
   type IpcMainInvokeEvent,
   type WebContents,
 } from 'electron';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { Storage } from './storage';
 import { findAction, toAccelerator } from '../shared/shortcuts';
 import { hostOf } from '../shared/url';
 import type { OpenRequest } from '../shared/ipc';
-import { PIP_ENTER_SCRIPT, PIP_EXIT_SCRIPT } from '../shared/pip';
+import { PIP_ENTER_SCRIPT, PIP_EXIT_SCRIPT, pipPopped } from '../shared/pip';
 
 const isMac = process.platform === 'darwin';
 const devUrl = process.env.KITE_DEV_URL;
@@ -94,20 +94,125 @@ function createMainWindow(): BrowserWindow {
   win.webContents.on('did-finish-load', () => {
     while (pendingExternal.length) win.webContents.send('external-url', pendingExternal.shift());
   });
-  // Tell the UI when you switch to another app (for auto picture-in-picture).
-  // Switching to one of Kite's own windows (a little window, a dialog) doesn't count.
-  win.on('blur', () =>
-    setTimeout(() => {
-      const f = BrowserWindow.getFocusedWindow();
-      if (!win.isDestroyed() && (!f || !isKiteWindow(f))) win.webContents.send('window-focus', false);
-    }, 60),
-  );
-  win.on('focus', () => win.webContents.send('window-focus', true));
+  // Switching to another app pops the playing video out (see autoPipOnLeave).
+  // On macOS the app-level "resign active" event is used instead: it fires
+  // first, before macOS marks Kite's covered window as hidden.
+  win.on('blur', () => {
+    if (!isMac) void autoPipOnLeave('window blur');
+  });
+  win.on('focus', () => void autoPipReturn('window focus'));
   return win;
 }
 
 function isKiteWindow(w: BrowserWindow) {
   return w === mainWindow || littleWindows.has(w);
+}
+
+// ---- Picture-in-picture -------------------------------------------------------
+
+/** When running from source, every pop-out attempt is written to kite-debug.log. */
+function debugLog(msg: string) {
+  if (app.isPackaged && !process.env.KITE_DEBUG_LOG) return;
+  try {
+    appendFileSync(process.env.KITE_DEBUG_LOG || join(app.getAppPath(), 'kite-debug.log'), `${new Date().toISOString()} ${msg}\n`);
+  } catch {
+    /* read-only location */
+  }
+}
+
+/** Tab ids the main window wants popped out on an app switch, best first. */
+let pipTargets: string[] = [];
+let pipTargetsHost: WebContents | null = null;
+/** The page whose video we popped out because you left Kite. */
+let pipLeft: { wcId: number; tabId: string; host: WebContents } | null = null;
+
+function pageForTab(tabId: string, host: WebContents) {
+  let found: number | null = null;
+  for (const [wcId, p] of pages) {
+    if (p.tabId !== tabId || p.host !== host) continue;
+    const wc = allWebContents.fromId(wcId);
+    if (!wc || wc.isDestroyed()) pages.delete(wcId); // page was replaced
+    else found = wcId;
+  }
+  return found;
+}
+
+/** Try to pop out a video in a page and each frame inside it. Returns a status for the log. */
+async function enterPip(wcId: number): Promise<string> {
+  const wc = allWebContents.fromId(wcId);
+  if (!wc || wc.isDestroyed()) return 'no page';
+  const statuses: string[] = [];
+  for (const frame of wc.mainFrame.framesInSubtree) {
+    try {
+      // `true` = run as if you clicked: browsers only allow pop-out after a user action.
+      const st = await frame.executeJavaScript(PIP_ENTER_SCRIPT, true);
+      if (pipPopped(st)) return String(st);
+      statuses.push(String(st));
+    } catch (err) {
+      statuses.push(`frame error ${(err as Error).message}`);
+    }
+  }
+  return statuses.join(' | ') || 'no frames';
+}
+
+async function exitPip(wcId: number) {
+  const wc = allWebContents.fromId(wcId);
+  if (!wc || wc.isDestroyed()) return;
+  for (const frame of wc.mainFrame.framesInSubtree) {
+    try {
+      await frame.executeJavaScript(PIP_EXIT_SCRIPT, true);
+    } catch {
+      /* frame went away */
+    }
+  }
+}
+
+/** You switched to another app: pop the visible playing video out right away. */
+let leaving = false;
+async function autoPipOnLeave(why: string) {
+  const host = pipTargetsHost;
+  if (!host || host.isDestroyed() || !pipTargets.length || pipLeft || leaving) {
+    debugLog(`leave (${why}): nothing to do [targets=${pipTargets.length}, already=${!!pipLeft || leaving}]`);
+    return;
+  }
+  leaving = true;
+  try {
+    await leaveNow(host, why);
+  } finally {
+    leaving = false;
+  }
+}
+
+async function leaveNow(host: WebContents, why: string) {
+  const t0 = Date.now();
+  for (const tabId of pipTargets) {
+    const wcId = pageForTab(tabId, host);
+    if (wcId === null) continue;
+    const status = await enterPip(wcId);
+    debugLog(`leave (${why}): tab ${tabId} → ${status} (${Date.now() - t0}ms)`);
+    if (pipPopped(status)) {
+      // Switched to a little window or a Kite dialog after all? Then it wasn't an app switch.
+      const f = BrowserWindow.getFocusedWindow();
+      if (!isMac && f && isKiteWindow(f) && f !== mainWindow) {
+        await exitPip(wcId);
+        debugLog('leave: focus went to another Kite window, video returned');
+        return;
+      }
+      pipLeft = { wcId, tabId, host };
+      if (!host.isDestroyed()) host.send('pip-state', { tabId, popped: true });
+      return;
+    }
+  }
+}
+
+/** Kite's main window is in front again: put the video back in its page. */
+async function autoPipReturn(why: string) {
+  const left = pipLeft;
+  if (!left) return;
+  pipLeft = null;
+  await exitPip(left.wcId);
+  debugLog(`return (${why}): tab ${left.tabId}`);
+  if (!left.host.isDestroyed()) left.host.send('pip-state', { tabId: left.tabId, popped: false });
 }
 
 // A page could try to open endless windows; allow a few per few seconds.
@@ -379,32 +484,25 @@ function setupIpc() {
     const wc = allWebContents.fromId(id);
     return wc ? wc.executeJavaScriptInIsolatedWorld(1999, [{ code }]) : null;
   });
-  // Picture-in-picture: try the page and every frame inside it (embedded players).
-  // Runs as if you clicked, because browsers only allow this after a user action.
+  // Picture-in-picture by hand (⌘⇧P) and on tab switches.
   handle('pip:enter', async (e, id: number) => {
     const page = pages.get(id);
-    const wc = allWebContents.fromId(id);
-    if (!page || page.host !== e.sender || !wc) return false;
-    for (const frame of wc.mainFrame.framesInSubtree) {
-      try {
-        if (await frame.executeJavaScript(PIP_ENTER_SCRIPT, true)) return true;
-      } catch {
-        /* frame went away */
-      }
-    }
-    return false;
+    if (!page || page.host !== e.sender) return false;
+    const status = await enterPip(id);
+    debugLog(`enter (switch or ⌘⇧P): tab ${page.tabId} → ${status}`);
+    return pipPopped(status);
   });
   handle('pip:exit', async (e, id: number) => {
     const page = pages.get(id);
-    const wc = allWebContents.fromId(id);
-    if (!page || page.host !== e.sender || !wc) return;
-    for (const frame of wc.mainFrame.framesInSubtree) {
-      try {
-        await frame.executeJavaScript(PIP_EXIT_SCRIPT, true);
-      } catch {
-        /* ignore */
-      }
-    }
+    if (!page || page.host !== e.sender) return;
+    if (pipLeft?.wcId === id) pipLeft = null;
+    await exitPip(id);
+  });
+  // Which tabs to pop out if you switch apps — kept up to date by the main window.
+  on('pip:targets', (e, tabIds: string[]) => {
+    if (!mainWindow || e.sender !== mainWindow.webContents || !Array.isArray(tabIds)) return;
+    pipTargets = tabIds.filter((t) => typeof t === 'string').slice(0, 4);
+    pipTargetsHost = e.sender;
   });
   on('shortcuts:set', (_e, map: Record<string, string>, hotkey: string) => {
     shortcuts = map;
@@ -532,6 +630,9 @@ if (!gotLock) {
     if (argUrl) pendingExternal.push(argUrl);
     mainWindow = createMainWindow();
     app.on('activate', () => ensureMainWindow());
+    // macOS only (other systems never send these; tests send them by hand).
+    app.on('did-resign-active', () => void autoPipOnLeave('app inactive'));
+    app.on('did-become-active', () => debugLog('app active again'));
   });
 
   app.on('window-all-closed', () => {

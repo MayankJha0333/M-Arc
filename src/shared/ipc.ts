@@ -27,8 +27,10 @@ export interface KiteBridge {
   /** Pop a page's playing video out into a floating window. Resolves true if one popped out. */
   pipEnter(webContentsId: number): Promise<boolean>;
   pipExit(webContentsId: number): Promise<void>;
-  /** Fires false when you switch to another app, true when Kite is back in front. */
-  onWindowFocus(cb: (focused: boolean) => void): () => void;
+  /** Tabs to pop a video out of the moment you switch to another app (best first). */
+  setPipTargets(tabIds: string[]): void;
+  /** The main process popped a video out (you left Kite) or put it back (you returned). */
+  onPipState(cb: (v: { tabId: string; popped: boolean }) => void): () => void;
   setShortcuts(shortcuts: Record<string, string>, littleHotkey: string): void;
   onShortcut(cb: (action: string) => void): () => void;
   onOpen(cb: (req: OpenRequest) => void): () => void;

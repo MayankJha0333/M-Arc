@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { launch, startSite, MOD } from './harness';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 let site: Awaited<ReturnType<typeof startSite>>;
 test.beforeAll(async () => {
@@ -266,7 +269,8 @@ test('security: Kite’s private API only answers Kite’s own UI', async () => 
 });
 
 test('video pop-out: a real playing video floats when you switch tabs or apps, and comes back', async () => {
-  const { app, win } = await launch();
+  const logFile = join(mkdtempSync(join(tmpdir(), 'kite-log-')), 'kite-debug.log');
+  const { app, win } = await launch(undefined, [], { KITE_DEBUG_LOG: logFile });
   await open(win, site.url('/video'));
   await expect(win.locator('[data-title="Video Page"]')).toHaveCount(1, { timeout: 15000 });
   const videoPage = () =>
@@ -282,11 +286,22 @@ test('video pop-out: a real playing video floats when you switch tabs or apps, a
   // Back -> returns to the page
   await win.locator('[data-title="Video Page"]').click();
   await expect.poll(videoPage, { timeout: 10000 }).toBe(false);
-  // Switch to another app (Kite's window loses focus) -> floating window; focus back -> returns
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('window-focus', false));
+  // macOS: Kite stops being the active app -> floating window at once, no round trip to the UI
+  await app.evaluate(({ app }) => app.emit('did-resign-active'));
   await expect.poll(videoPage, { timeout: 10000 }).toBe(true);
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('window-focus', true));
+  await expect(win.locator('[data-title="Video Page"] [data-testid^="sound-"] svg')).toHaveClass(/picture-in-picture/i);
+  // Clicking the floating window (Kite active again, main window not focused) keeps it floating
+  await app.evaluate(({ app }) => app.emit('did-become-active'));
+  await win.waitForTimeout(500);
+  expect(await videoPage()).toBe(true);
+  // Kite's own window in front again -> returns
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].emit('focus'));
   await expect.poll(videoPage, { timeout: 10000 }).toBe(false);
+  // Every attempt is written to the debug log, with the reason
+  const log = readFileSync(logFile, 'utf8');
+  expect(log).toMatch(/enter \(switch or ⌘⇧P\): tab \S+ → ok/);
+  expect(log).toMatch(/leave \(app inactive\): tab \S+ → ok \(\d+ms\)/);
+  expect(log).toMatch(/return \(window focus\)/);
   await app.close();
 });
 
