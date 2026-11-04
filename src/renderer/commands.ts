@@ -109,6 +109,15 @@ export const actions: Record<string, () => void> = {
     if (id) closeItemCmd(id);
   },
   reopenClosed: () => reopen(),
+  togglePin: () => {
+    const id = activeId();
+    if (!id) return;
+    const pinned = act((d) => {
+      ops.togglePin(d, id);
+      return ops.isPinnedOrFavorite(d, id);
+    });
+    toast(pinned ? 'Pinned' : 'Unpinned');
+  },
   toggleSidebar: () => act((d) => void (d.settings.sidebarCollapsed = !d.settings.sidebarCollapsed)),
   copyUrl: () => void copyActiveUrl(),
   reload: () => surface(activeTabId())?.reload(),

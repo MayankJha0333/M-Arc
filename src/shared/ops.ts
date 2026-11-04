@@ -4,7 +4,7 @@
 import { newId } from './ids';
 import type { AppState, ID, Item, ListName, TabItem } from './types';
 import { attach, detach, flatVisible, listAt, locate, ownerSplit, purge } from './tree';
-import { hostOf } from './url';
+import { hostOf, tidyTitle } from './url';
 
 const MAX_CLOSED = 30;
 const MAX_HISTORY = 5000;
@@ -273,4 +273,82 @@ export function ensureActiveSpaceValid(s: AppState): void {
 export function toggleFolder(s: AppState, id: ID, collapsed?: boolean): void {
   const f = s.items[id];
   if (f?.kind === 'folder') f.collapsed = collapsed ?? !f.collapsed;
+}
+
+// ---- Pinned + Favorites -------------------------------------------------------
+
+/** Pin an item: it moves to the bottom of Pinned and remembers its current page. */
+export function pinItem(s: AppState, id: ID, tidy = s.settings.tidyTitles): boolean {
+  const it = s.items[id];
+  if (!it || it.kind === 'folder') return false;
+  const loc = locate(s, id);
+  if (!loc || loc.list === 'pinned') return false;
+  const spaceId = loc.spaceId ?? s.activeSpaceId;
+  detach(s, id);
+  const sp = s.spaces.find((x) => x.id === spaceId)!;
+  sp.pinned.push(id);
+  if (it.kind === 'tab') {
+    it.homeUrl = it.url;
+    if (tidy && !it.customTitle) {
+      const t = tidyTitle(it.title, it.url);
+      if (t && t !== it.title) it.customTitle = t;
+    }
+  }
+  return true;
+}
+
+/** Unpin: back to the top of Today. The tab forgets its home page. */
+export function unpinItem(s: AppState, id: ID): boolean {
+  const it = s.items[id];
+  if (!it || it.kind === 'folder') return false;
+  const loc = locate(s, id);
+  if (!loc || loc.list === 'today') return false;
+  const spaceId = loc.spaceId ?? s.activeSpaceId;
+  detach(s, id);
+  attach(s, id, { list: 'today', spaceId, parentId: null, index: 0 });
+  if (it.kind === 'tab') it.homeUrl = undefined;
+  return true;
+}
+
+export function togglePin(s: AppState, id: ID): boolean {
+  const loc = locate(s, id);
+  if (!loc) return false;
+  return loc.list === 'today' ? pinItem(s, id) : unpinItem(s, id);
+}
+
+/** Favorites are tabs only and are shared by every Space. */
+export function addFavorite(s: AppState, id: ID, index?: number): boolean {
+  const it = s.items[id];
+  if (!it || it.kind !== 'tab') return false;
+  const loc = locate(s, id);
+  if (!loc || loc.list === 'favorites') return false;
+  detach(s, id);
+  attach(s, id, { list: 'favorites', spaceId: null, parentId: null, index: index ?? s.favorites.length });
+  it.homeUrl = it.url;
+  return true;
+}
+
+/** Take a tab out of Favorites; it lands in the current Space (Pinned or Today). */
+export function removeFavorite(s: AppState, id: ID, to: 'today' | 'pinned' = 'today'): boolean {
+  const it = s.items[id];
+  if (!it || it.kind !== 'tab' || !s.favorites.includes(id)) return false;
+  detach(s, id);
+  const sp = s.spaces.find((x) => x.id === s.activeSpaceId)!;
+  if (to === 'pinned') sp.pinned.push(id);
+  else {
+    sp.today.unshift(id);
+    it.homeUrl = undefined;
+  }
+  return true;
+}
+
+/** Make the page a pinned/favorite tab is showing its new home. */
+export function setHomeHere(s: AppState, id: ID): void {
+  const t = s.items[id];
+  if (t?.kind === 'tab' && t.homeUrl) t.homeUrl = t.url;
+}
+
+export function isPinnedOrFavorite(s: AppState, id: ID): boolean {
+  const loc = locate(s, id);
+  return !!loc && loc.list !== 'today';
 }
