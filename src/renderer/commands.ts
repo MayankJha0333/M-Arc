@@ -7,6 +7,7 @@ import type { ID } from '@shared/types';
 import { act, getS, getUi, markLoaded, setUi, toast, unload, useKite } from './store';
 import { createFolder, deleteFolder, setAllFolders } from '@shared/folders';
 import { nthSpace, stepSpace, switchSpace } from '@shared/spaces';
+import { clearToday, runAutoArchive } from '@shared/archive';
 import type { AppState } from '@shared/types';
 import { surface } from './surfaces';
 import { bridge, now } from './platform';
@@ -103,6 +104,16 @@ export function switchSpaceCmd(id: ID) {
   afterSpaceChange();
 }
 
+/** Archive stale Today tabs now (also runs every minute). */
+export function autoArchiveNow() {
+  const n = act((d) => runAutoArchive(d, now()));
+  if (n > 0) {
+    setUi((u) => ({ loaded: u.loaded.filter((id) => getS().items[id]) }));
+    toast(`Auto-archived ${n} tab${n === 1 ? '' : 's'}`, 'View', () => setUi({ panel: 'archive' }));
+  }
+  return n;
+}
+
 export function reopen() {
   const id = act((d) => ops.reopenClosed(d, now()));
   if (id) selectItem(id);
@@ -169,6 +180,16 @@ export const actions: Record<string, () => void> = {
   },
   settings: () => setUi({ panel: 'settings' }),
   newFolder: () => void newFolderCmd(),
+  archivePage: () => setUi({ panel: 'archive' }),
+  clearToday: () => {
+    const sp = getS().activeSpaceId;
+    const n = getS().spaces.find((x) => x.id === sp)?.today.length ?? 0;
+    if (!n) return;
+    const loaded = getUi().loaded;
+    undoable(`Archived ${n} tab${n === 1 ? '' : 's'}`, (d) => void clearToday(d, sp, now()));
+    setUi({ loaded: loaded.filter((id) => getS().items[id]) });
+  },
+  runAutoArchive: () => autoArchiveNow(),
   nextSpace: () => {
     act((d) => stepSpace(d, 1));
     afterSpaceChange();

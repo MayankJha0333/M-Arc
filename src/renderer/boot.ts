@@ -7,7 +7,7 @@ import * as ops from '@shared/ops';
 import type { Settings } from '@shared/types';
 import { bridge, isMac } from './platform';
 import { getS, getUi, markLoaded, startAutosave, useKite } from './store';
-import { openUrl, runAction } from './commands';
+import { openUrl, runAction, autoArchiveNow } from './commands';
 import { handleOpenRequest, handleExternalUrl } from './routingRuntime';
 
 /** All shortcuts including the numbered ones (⌘1…⌘9, ⌃1…⌃9). */
@@ -35,6 +35,10 @@ export async function boot() {
     if (it.kind === 'tab') markLoaded(active);
     if (it.kind === 'split') it.panes.forEach(markLoaded);
   }
+
+  // Auto-archive: once at launch (Kite may have been closed for days), then every minute.
+  autoArchiveNow();
+  setInterval(autoArchiveNow, 60_000);
 
   bridge.onShortcut((a) => runAction(a));
   bridge.onOpen((req) => handleOpenRequest(req));

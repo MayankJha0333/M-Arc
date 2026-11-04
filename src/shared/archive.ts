@@ -72,3 +72,57 @@ export function deleteArchived(s: AppState, entryId: ID): void {
 export function clearArchive(s: AppState): void {
   s.archive = [];
 }
+
+/** The archive time that applies to a Space (its own override, else the global setting). */
+export function archiveAfterFor(s: AppState, spaceId: ID): number | null {
+  const sp = s.spaces.find((x) => x.id === spaceId);
+  if (sp && sp.archiveAfterMs !== undefined) return sp.archiveAfterMs;
+  return s.settings.archiveAfterMs;
+}
+
+/**
+ * Today items that haven't been used for longer than the archive time.
+ * Pinned items, Favorites and the item you're looking at are never archived.
+ */
+export function findStale(s: AppState, now: number): ID[] {
+  const out: ID[] = [];
+  for (const sp of s.spaces) {
+    const after = archiveAfterFor(s, sp.id);
+    if (after === null || after === undefined) continue;
+    const active = s.activeBySpace[sp.id];
+    for (const id of sp.today) {
+      if (id === active) continue;
+      const it = s.items[id];
+      if (!it || it.kind === 'folder') continue;
+      if (now - it.lastActiveAt >= after) out.push(id);
+    }
+  }
+  return out;
+}
+
+export function runAutoArchive(s: AppState, now: number): number {
+  let n = 0;
+  for (const id of findStale(s, now)) n += archiveItem(s, id, now, 'auto');
+  return n;
+}
+
+/** Group archive entries for display: Today, Yesterday, then by date. */
+export function groupArchive(entries: ArchiveEntry[], now: number, query = ''): { label: string; items: ArchiveEntry[] }[] {
+  const q = query.trim().toLowerCase();
+  const startOfDay = (t: number) => {
+    const d = new Date(t);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  };
+  const today = startOfDay(now);
+  const groups = new Map<string, ArchiveEntry[]>();
+  for (const e of entries) {
+    if (q && !e.title.toLowerCase().includes(q) && !e.url.toLowerCase().includes(q)) continue;
+    const day = startOfDay(e.archivedAt);
+    const label =
+      day === today ? 'Today' : day === startOfDay(today - 1) ? 'Yesterday' : new Date(day).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: new Date(day).getFullYear() === new Date(now).getFullYear() ? undefined : 'numeric' });
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label)!.push(e);
+  }
+  return Array.from(groups, ([label, items]) => ({ label, items }));
+}
