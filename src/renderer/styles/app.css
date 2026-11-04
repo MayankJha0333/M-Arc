@@ -2276,3 +2276,215 @@ body.resizing-v * {
   margin-top: 8px;
   color: var(--ink-2);
 }
+
+/* ---- notes ---- */
+
+.note {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  user-select: text;
+}
+
+.note-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+  position: relative;
+}
+
+.note-tool {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-2);
+}
+
+.note-tool:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.note-tool[data-on] {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--ink);
+}
+
+.note-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 6px;
+  background: var(--line);
+}
+
+.note-link-form {
+  position: absolute;
+  top: 46px;
+  left: 50%;
+  z-index: 5;
+  width: 320px;
+  transform: translateX(-50%);
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--overlay);
+  box-shadow: var(--shadow);
+}
+
+.note-scroll {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.note-paper {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 56px 40px 120px;
+}
+
+.note-title {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: 'Bricolage Grotesque', var(--font);
+  font-size: calc(38px * var(--scale));
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  outline: none;
+  margin-bottom: 14px;
+}
+
+.note-title::placeholder {
+  color: var(--ink-3);
+}
+
+.note-body {
+  outline: none;
+  font-size: calc(16px * var(--scale));
+  line-height: 1.7;
+  color: var(--ink);
+}
+
+.note-body p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
+.note-body h1,
+.note-body h2,
+.note-body h3 {
+  font-family: 'Bricolage Grotesque', var(--font);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  margin: 1.4em 0 0.4em;
+}
+
+.note-body h1 {
+  font-size: 1.6em;
+}
+
+.note-body h2 {
+  font-size: 1.3em;
+}
+
+.note-body a {
+  color: var(--accent);
+}
+
+.note-body blockquote {
+  margin: 1em 0;
+  padding-left: 16px;
+  border-left: 3px solid var(--tint-2);
+  color: var(--ink-2);
+}
+
+.note-body code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--hover);
+  font-size: 0.88em;
+}
+
+.note-body pre {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #1e1c1a;
+  color: #f1efea;
+  overflow-x: auto;
+}
+
+.note-body pre code {
+  background: none;
+  padding: 0;
+}
+
+.note-body hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 2em 0;
+}
+
+.note-body ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 4px;
+}
+
+.note-body ul[data-type='taskList'] li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.note-body ul[data-type='taskList'] li > label {
+  margin-top: 4px;
+}
+
+.note-body ul[data-type='taskList'] input {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+}
+
+.note-body ul[data-type='taskList'] li[data-checked='true'] > div {
+  color: var(--ink-3);
+  text-decoration: line-through;
+}
+
+.note-foot {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 12px 6px 18px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-3);
+  font-size: calc(11.5px * var(--scale));
+}
+
+.note-foot .btn {
+  margin-left: auto;
+}
+
+.note-body ul[data-type='taskList'] li > div > p {
+  margin: 0;
+}
+
+.note-body ul[data-type='taskList'] li {
+  margin: 4px 0;
+}
+
+.note-body ul[data-type='taskList'] li > label {
+  margin-top: 5px;
+}

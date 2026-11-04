@@ -44,6 +44,7 @@ export type Suggestion =
   | { kind: 'open'; key: string; title: string; url: string }
   | { kind: 'search'; key: string; title: string; url: string }
   | { kind: 'tab'; key: string; title: string; url: string; itemId: ID; spaceId: ID | null; spaceName: string }
+  | { kind: 'note'; key: string; title: string; itemId: ID; spaceId: ID | null; spaceName: string }
   | { kind: 'history'; key: string; title: string; url: string }
   | { kind: 'action'; key: string; title: string; actionId: string }
   | { kind: 'space'; key: string; title: string; spaceId: ID; icon: string };
@@ -141,6 +142,13 @@ export function suggest(s: AppState, query: string, o: SuggestOptions = {}): Sug
   for (const t of tabs) {
     const sc = best(q, t.title, hostOf(t.url), t.url);
     if (sc > 0) scored.push({ sug: t, score: sc + 12 + (t.spaceId === s.activeSpaceId ? 3 : 0) });
+  }
+  for (const it of Object.values(s.items)) {
+    if (it.kind !== 'note') continue;
+    const loc = locate(s, it.id);
+    if (!loc) continue;
+    const sc = best(q, it.title);
+    if (sc > 0) scored.push({ sug: { kind: 'note', key: `note:${it.id}`, title: it.title, itemId: it.id, spaceId: loc.spaceId, spaceName: spaceName(loc.spaceId) }, score: sc + 12 });
   }
   for (const h of s.history.slice(0, 2000)) {
     if (openUrls.has(h.url)) continue;

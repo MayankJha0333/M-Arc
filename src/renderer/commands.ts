@@ -9,6 +9,7 @@ import { createFolder, deleteFolder, setAllFolders } from '@shared/folders';
 import { createSpace, nthSpace, stepSpace, switchSpace } from '@shared/spaces';
 import { clearToday, runAutoArchive } from '@shared/archive';
 import * as split from '@shared/split';
+import { createNote } from '@shared/notes';
 import { onStageDrop } from './dnd';
 import type { AppState } from '@shared/types';
 import { surface } from './surfaces';
@@ -255,6 +256,7 @@ export const actions: Record<string, () => void> = {
   closePeek: () => closePeekHook(),
   littleWindow: () => bridge.openLittle('kite://new'),
   boostEditor: () => boostHook(),
+  newNote: () => void act((d) => createNote(d, { now: now() })),
   boostsPanel: () => setUi({ panel: 'boosts' }),
   routingPanel: () => setUi({ panel: 'routing' }),
   nextSpace: () => {

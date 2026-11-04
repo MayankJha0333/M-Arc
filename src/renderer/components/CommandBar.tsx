@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Globe, ArrowRight, Zap, CornerDownLeft, History, LayoutGrid } from 'lucide-react';
+import { Search, Globe, ArrowRight, Zap, CornerDownLeft, History, LayoutGrid, StickyNote } from 'lucide-react';
 import { ACTION_CATALOG, matchRanges, suggest, type Suggestion } from '@shared/commandbar';
 import { formatShortcut } from '@shared/shortcuts';
 import { displayUrl } from '@shared/url';
@@ -68,6 +68,9 @@ function CommandBarInner({ mode, initial, target }: { mode: 'new' | 'edit'; init
       case 'tab':
         if (target === 'split') openUrl(r.url, 'split');
         else selectItem(r.itemId);
+        break;
+      case 'note':
+        selectItem(r.itemId);
         break;
       case 'action':
         actions[r.actionId]?.();
@@ -150,6 +153,8 @@ function CommandBarInner({ mode, initial, target }: { mode: 'new' | 'edit'; init
                     <Globe size={17} />
                   ) : r.kind === 'search' ? (
                     <Search size={17} />
+                  ) : r.kind === 'note' ? (
+                    <StickyNote size={16} />
                   ) : r.kind === 'action' ? (
                     <Zap size={16} />
                   ) : (
@@ -178,6 +183,11 @@ function CommandBarInner({ mode, initial, target }: { mode: 'new' | 'edit'; init
                   {r.kind === 'tab' && (
                     <span className="cb-pill">
                       <LayoutGrid size={11} /> Switch to Tab{r.spaceId && r.spaceId !== s.activeSpaceId ? ` · ${r.spaceName}` : ''}
+                    </span>
+                  )}
+                  {r.kind === 'note' && (
+                    <span className="cb-pill">
+                      <StickyNote size={11} /> Switch to Note
                     </span>
                   )}
                   {r.kind === 'history' && <History size={13} className="cb-dim" />}

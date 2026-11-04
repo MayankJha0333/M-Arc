@@ -84,6 +84,15 @@ describe('suggest', () => {
     expect(suggest(world(), 'work').some((x) => x.kind === 'space')).toBe(true);
   });
 
+  it('finds notes by title', () => {
+    let s = world();
+    [s] = run(s, (d) => {
+      d.items.n = { id: 'n', kind: 'note', title: 'Recipe ideas', html: '', createdAt: 0, updatedAt: 0, lastActiveAt: 0 };
+      d.spaces[0].today.push('n');
+    });
+    expect(suggest(s, 'recipe')[0]).toMatchObject({ kind: 'note', itemId: 'n' });
+  });
+
   it('never returns more than the limit or duplicate keys', () => {
     const r = suggest(world(), 'e', { limit: 5 });
     expect(r.length).toBeLessThanOrEqual(5);
