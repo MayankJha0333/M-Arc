@@ -1,8 +1,10 @@
 import { useKite } from '../store';
+import { SpaceEditor } from './Spaces';
 
-/** Side sheets (Settings, Archive, Boosts…). Filled in by later features. */
+/** Side sheets (Settings, Archive, Boosts, Space editor…). */
 export function Panels() {
   const panel = useKite((st) => st.ui.panel);
-  if (!panel) return null;
+  const arg = useKite((st) => st.ui.panelArg);
+  if (panel === 'space' && arg) return <SpaceEditor id={arg} />;
   return null;
 }

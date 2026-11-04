@@ -6,6 +6,7 @@ import { locate } from '@shared/tree';
 import type { ID } from '@shared/types';
 import { act, getS, getUi, markLoaded, setUi, toast, unload, useKite } from './store';
 import { createFolder, deleteFolder, setAllFolders } from '@shared/folders';
+import { nthSpace, stepSpace, switchSpace } from '@shared/spaces';
 import type { AppState } from '@shared/types';
 import { surface } from './surfaces';
 import { bridge, now } from './platform';
@@ -91,6 +92,17 @@ export function deleteFolderCmd(id: ID) {
   undoable(n ? `Deleted “${it.title}” · ${n} item${n === 1 ? '' : 's'} moved to Archive` : `Deleted “${it.title}”`, (d) => void deleteFolder(d, id, now()));
 }
 
+/** After a Space change, make sure its selected page is loaded. */
+function afterSpaceChange() {
+  const id = activeId();
+  if (id) selectItem(id);
+}
+
+export function switchSpaceCmd(id: ID) {
+  act((d) => switchSpace(d, id));
+  afterSpaceChange();
+}
+
 export function reopen() {
   const id = act((d) => ops.reopenClosed(d, now()));
   if (id) selectItem(id);
@@ -157,6 +169,14 @@ export const actions: Record<string, () => void> = {
   },
   settings: () => setUi({ panel: 'settings' }),
   newFolder: () => void newFolderCmd(),
+  nextSpace: () => {
+    act((d) => stepSpace(d, 1));
+    afterSpaceChange();
+  },
+  prevSpace: () => {
+    act((d) => stepSpace(d, -1));
+    afterSpaceChange();
+  },
   collapseFolders: () => act((d) => setAllFolders(d, d.activeSpaceId, true)),
   expandFolders: () => act((d) => setAllFolders(d, d.activeSpaceId, false)),
   findInPage: () => setUi({ findOpen: true }),
@@ -171,6 +191,10 @@ export function runAction(name: string) {
 }
 
 for (let n = 1; n <= 9; n++) {
+  actions[`space${n}`] = () => {
+    act((d) => nthSpace(d, n));
+    afterSpaceChange();
+  };
   actions[`tab${n}`] = () => {
     act((d) => ops.selectNth(d, n, now()));
     const id = activeId();

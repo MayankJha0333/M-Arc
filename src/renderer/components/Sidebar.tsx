@@ -7,7 +7,8 @@ import { actions } from '../commands';
 import { isElectron, isMac } from '../platform';
 import { ItemRow } from './ItemRow';
 import { Favorites } from './Favorites';
-import { SpaceBar, SpaceHeader } from './Spaces';
+import { SpaceBar, SpaceHeader, useSpaceSwipe } from './Spaces';
+import { useRef } from 'react';
 import { formatShortcut } from '@shared/shortcuts';
 import { openMenu } from './ContextMenu';
 import { DropZone } from '../dnd';
@@ -19,6 +20,11 @@ export function Sidebar() {
   const shortcuts = useKite((st) => st.s.settings.shortcuts);
   const width = useKite((st) => st.s.settings.sidebarWidth);
   const needsLightsGap = isElectron && isMac && side === 'left';
+  const onWheel = useSpaceSwipe();
+  const spaceIndex = useKite((st) => st.s.spaces.findIndex((x) => x.id === st.s.activeSpaceId));
+  const lastIndex = useRef(spaceIndex);
+  const dir = spaceIndex === lastIndex.current ? 'none' : spaceIndex > lastIndex.current ? 'next' : 'prev';
+  lastIndex.current = spaceIndex;
 
   return (
     <aside className="sidebar" data-testid="sidebar" aria-label="Sidebar" style={{ width }}>
@@ -33,8 +39,9 @@ export function Sidebar() {
 
       {showUrl && <UrlPill />}
 
-      <div className="sb-scroll" data-testid="sb-scroll">
+      <div className="sb-scroll" data-testid="sb-scroll" onWheel={onWheel}>
         <Favorites />
+        <div className="space-pane" key={space.id} data-dir={dir}>
         <SpaceHeader space={space} />
 
         <section className="sb-section" aria-label="Pinned" data-testid="pinned-list" role="tree">
@@ -67,6 +74,7 @@ export function Sidebar() {
           ))}
           <DropZone zone={{ type: 'end', list: 'today', spaceId: space.id }} className="list-end grow" testId="today-end" />
         </section>
+        </div>
       </div>
 
       <footer className="sb-footer">
