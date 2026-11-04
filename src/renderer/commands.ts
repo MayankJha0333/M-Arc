@@ -219,7 +219,8 @@ export const actions: Record<string, () => void> = {
     const id = activeId();
     if (id) selectItem(id);
   },
-  settings: () => setUi({ panel: 'settings' }),
+  settings: () => setUi({ panel: 'settings', panelArg: undefined }),
+  shortcutsPanel: () => setUi({ panel: 'shortcuts' }),
   newFolder: () => void newFolderCmd(),
   newSplit: () => {
     if (!activeId()) return setUi({ commandBar: { mode: 'new', initial: '' } });

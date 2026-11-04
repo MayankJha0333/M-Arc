@@ -1,0 +1,88 @@
+// Changing settings safely (values are kept within sensible limits).
+
+import { DEFAULT_SHORTCUTS, defaultSettings } from './defaults';
+import type { AppState, Settings } from './types';
+import { loadState, serialize } from './persistence';
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+export const LIMITS = {
+  sidebarWidth: [200, 440],
+  fontScale: [0.85, 1.25],
+  radius: [0, 24],
+  gap: [0, 20],
+  favoritesColumns: [3, 6],
+} as const;
+
+export function updateSettings(s: AppState, patch: Partial<Settings>): void {
+  const next = { ...s.settings, ...patch };
+  for (const [k, [lo, hi]] of Object.entries(LIMITS)) {
+    const key = k as keyof typeof LIMITS;
+    const v = Number(next[key]);
+    (next as Record<string, unknown>)[key] = Number.isFinite(v) ? clamp(key === 'fontScale' ? v : Math.round(v), lo, hi) : defaultSettings()[key];
+  }
+  if (typeof next.searchEngine !== 'string' || !next.searchEngine.includes('%s') || !/^https?:\/\//i.test(next.searchEngine)) next.searchEngine = s.settings.searchEngine;
+  s.settings = next;
+}
+
+/** Appearance back to defaults (keeps shortcuts, archive and search choices). */
+export function resetAppearance(s: AppState): void {
+  const d = defaultSettings();
+  const keys: (keyof Settings)[] = ['sidebarSide', 'sidebarWidth', 'density', 'font', 'fontScale', 'radius', 'gap', 'showUrlBar', 'showTabCloseOnHover', 'favoritesColumns', 'reduceMotion', 'chromeCss'];
+  for (const k of keys) (s.settings as unknown as Record<string, unknown>)[k] = d[k];
+}
+
+/** Which other action already uses this shortcut (or null). */
+export function shortcutConflict(s: AppState, action: string, combo: string): string | null {
+  if (!combo) return null;
+  for (const [a, c] of Object.entries(s.settings.shortcuts)) if (a !== action && c === combo) return a;
+  if (combo === s.settings.littleHotkey && action !== 'littleWindow') return 'littleHotkey';
+  return null;
+}
+
+/**
+ * Give an action a new shortcut. If another action had it, that one is
+ * cleared (so two actions never share keys). Returns the cleared action.
+ */
+export function setShortcut(s: AppState, action: string, combo: string): string | null {
+  const other = shortcutConflict(s, action, combo);
+  if (other && other !== 'littleHotkey') s.settings.shortcuts[other] = '';
+  s.settings.shortcuts[action] = combo;
+  if (action === 'littleWindow') s.settings.littleHotkey = combo;
+  return other;
+}
+
+export function resetShortcuts(s: AppState, action?: string): void {
+  if (action) {
+    const def = DEFAULT_SHORTCUTS[action] ?? '';
+    const other = shortcutConflict(s, action, def);
+    if (other && other !== 'littleHotkey') s.settings.shortcuts[other] = '';
+    s.settings.shortcuts[action] = def;
+    if (action === 'littleWindow') s.settings.littleHotkey = def;
+  } else {
+    s.settings.shortcuts = { ...DEFAULT_SHORTCUTS };
+    s.settings.littleHotkey = DEFAULT_SHORTCUTS.littleWindow;
+  }
+}
+
+export function clearHistory(s: AppState): void {
+  s.history = [];
+}
+
+/** A full backup of Kite as a file. */
+export function exportBackup(s: AppState): string {
+  return JSON.stringify({ kind: 'kite-backup', exportedAt: new Date().toISOString(), state: JSON.parse(serialize(s)) }, null, 1);
+}
+
+/** Read a backup file. Throws with a readable message if it isn't one. */
+export function readBackup(text: string): AppState {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    throw new Error('That file isn’t a Kite backup.');
+  }
+  const r = raw as { kind?: string; state?: unknown };
+  if (r?.kind !== 'kite-backup' || typeof r.state !== 'object') throw new Error('That file isn’t a Kite backup.');
+  return loadState(r.state);
+}

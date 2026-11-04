@@ -4,6 +4,7 @@ import { ArchivePage } from './ArchivePage';
 import { BoostEditor, BoostsList } from './Boosts';
 import { RoutingPanel } from './Routing';
 import { ImportArc } from './ImportArc';
+import { SettingsPanel } from './Settings';
 
 /** Side sheets (Settings, Archive, Boosts, Space editor…). */
 export function Panels() {
@@ -15,5 +16,7 @@ export function Panels() {
   if (panel === 'boosts') return <BoostsList />;
   if (panel === 'routing') return <RoutingPanel />;
   if (panel === 'import') return <ImportArc />;
+  if (panel === 'settings') return <SettingsPanel key={arg ?? 'appearance'} initial={arg} />;
+  if (panel === 'shortcuts') return <SettingsPanel key="keys" initial="keys" />;
   return null;
 }
