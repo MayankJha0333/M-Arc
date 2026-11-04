@@ -10,6 +10,7 @@ import { itemMenu } from '../itemMenus';
 import * as ops from '@shared/ops';
 import { hostOf } from '@shared/url';
 import { useDragRow } from '../dnd';
+import { splitTitle } from './SplitView';
 
 interface Props {
   id: ID;
@@ -24,12 +25,17 @@ export const ItemRow = memo(function ItemRow({ id, list, depth }: Props) {
   const renaming = useKite((st) => st.ui.renaming === id);
   const closeOnHover = useKite((st) => st.s.settings.showTabCloseOnHover);
   const drag = useDragRow(id, item?.kind === 'folder');
+  const liveTitle = useKite((st) => {
+    const it = st.s.items[id];
+    return !it ? '' : it.kind === 'split' ? splitTitle(it, st.s.items) : displayTitle(it);
+  });
   if (!item) return null;
+  const title = liveTitle;
 
   if (item.kind === 'folder') return <FolderRow item={item} depth={depth} renaming={renaming} drag={drag} />;
 
   const awayFromHome = item.kind === 'tab' && item.homeUrl && hostOf(item.homeUrl) !== '' && item.url !== item.homeUrl;
-  const title = displayTitle(item);
+
   return (
     <div
       ref={drag.setRef}

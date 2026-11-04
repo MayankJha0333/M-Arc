@@ -8,6 +8,8 @@ import { act, getS, getUi, markLoaded, setUi, toast, unload, useKite } from './s
 import { createFolder, deleteFolder, setAllFolders } from '@shared/folders';
 import { createSpace, nthSpace, stepSpace, switchSpace } from '@shared/spaces';
 import { clearToday, runAutoArchive } from '@shared/archive';
+import * as split from '@shared/split';
+import { onStageDrop } from './dnd';
 import type { AppState } from '@shared/types';
 import { surface } from './surfaces';
 import { bridge, now } from './platform';
@@ -42,11 +44,30 @@ export function openUrl(input: string, where: OpenWhere = 'new', opts: { spaceId
   return id;
 }
 
-/** Replaced by the split view feature. */
-export let openInSplit: (url: string) => ID | null = (url) => openUrl(url, 'new');
-export function setOpenInSplit(fn: (url: string) => ID | null) {
-  openInSplit = fn;
+/** Open a page next to the current one (makes or grows a split view). */
+export function openInSplit(url: string): ID | null {
+  const id = act((d) => split.openInSplit(d, url, now()));
+  if (!id) {
+    toast('A split view holds up to 4 pages');
+    return null;
+  }
+  markLoaded(id);
+  const it = getS().items[activeId() ?? ''];
+  if (it?.kind === 'split') it.panes.forEach(markLoaded);
+  return id;
 }
+
+/** Combine a sidebar tab with what's showing (drag onto the page, or menu). */
+export function splitWithCmd(tabId: ID) {
+  const r = act((d) => split.splitWith(d, tabId, now()));
+  if (!r) return toast('Can’t add that to a split view');
+  const it = getS().items[r];
+  if (it?.kind === 'split') it.panes.forEach(markLoaded);
+}
+
+onStageDrop((id) => {
+  if (getS().items[id]?.kind === 'tab') splitWithCmd(id);
+});
 
 /** Point an existing tab at a new URL. */
 export function navigateTab(id: ID, url: string) {
@@ -189,6 +210,14 @@ export const actions: Record<string, () => void> = {
   },
   settings: () => setUi({ panel: 'settings' }),
   newFolder: () => void newFolderCmd(),
+  newSplit: () => {
+    if (!activeId()) return setUi({ commandBar: { mode: 'new', initial: '' } });
+    setUi({ commandBar: { mode: 'new', initial: '', target: 'split' } });
+  },
+  unsplit: () => {
+    const id = activeId();
+    if (id && getS().items[id]?.kind === 'split') act((d) => void ops.unsplit(d, id, now()));
+  },
   newSpace: () => {
     const id = act((d) => createSpace(d, {}));
     setUi({ panel: 'space', panelArg: id });

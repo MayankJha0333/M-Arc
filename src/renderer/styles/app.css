@@ -1754,3 +1754,162 @@ select.input {
   border-radius: 5px;
   background: var(--hover);
 }
+
+/* ---- split view ---- */
+
+.surface-slot[data-split] {
+  border-radius: 0 0 calc(var(--radius) - 4px) calc(var(--radius) - 4px);
+  overflow: hidden;
+}
+
+.split-chrome {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.pane-frame {
+  position: absolute;
+  border-radius: calc(var(--radius) - 4px);
+  box-shadow: 0 0 0 1px var(--line);
+  transition: box-shadow 0.15s;
+}
+
+.pane-frame[data-focused] {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.pane-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 4px 0 10px;
+  border-radius: calc(var(--radius) - 4px) calc(var(--radius) - 4px) 0 0;
+  background: color-mix(in srgb, var(--chrome-mid) 35%, var(--card));
+  pointer-events: auto;
+  font-size: calc(12px * var(--scale));
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.pane-frame[data-focused] .pane-bar {
+  color: var(--ink);
+}
+
+.pane-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pane-actions {
+  display: flex;
+  gap: 1px;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.pane-bar:hover .pane-actions,
+.pane-frame[data-focused] .pane-actions {
+  opacity: 1;
+}
+
+.icon-btn.tiny {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
+
+.split-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  pointer-events: auto;
+  cursor: col-resize;
+  z-index: 4;
+}
+
+.split-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 4px;
+  height: 36px;
+  margin-top: -18px;
+  border-radius: 4px;
+  background: var(--ink-3);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.split-divider:hover::after {
+  opacity: 0.6;
+}
+
+.split-chrome[data-orientation='column'] .split-divider {
+  top: auto;
+  left: 0;
+  right: 0;
+  width: auto;
+  height: 10px;
+  cursor: row-resize;
+}
+
+.split-chrome[data-orientation='column'] .split-divider::after {
+  top: 3px;
+  left: 50%;
+  width: 36px;
+  height: 4px;
+  margin: 0 0 0 -18px;
+}
+
+body.resizing .surface {
+  pointer-events: none;
+}
+
+body.resizing-v,
+body.resizing-v * {
+  cursor: row-resize !important;
+}
+
+.card[data-split] {
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.card[data-split] .pane-frame {
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.card[data-split] .pane-frame[data-focused] {
+  box-shadow: var(--shadow), 0 0 0 2px var(--accent);
+}
+
+.card[data-split] .surface-slot[data-split] {
+  z-index: 1;
+}
+
+.card[data-split] .split-chrome {
+  z-index: auto;
+}
+
+.card[data-split] .pane-frame {
+  z-index: 0;
+}
+
+.card[data-split] .pane-bar {
+  position: relative;
+  z-index: 2;
+}
+
+.card[data-split] .split-divider {
+  z-index: 2;
+}

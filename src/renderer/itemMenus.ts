@@ -5,7 +5,8 @@ import { locate } from '@shared/tree';
 import type { ID } from '@shared/types';
 import type { ContextMenuItem } from './store';
 import { act, getS, setUi } from './store';
-import { closeItemCmd, selectItem, copyActiveUrl, navigateTab, newFolderCmd, deleteFolderCmd } from './commands';
+import { closeItemCmd, selectItem, copyActiveUrl, navigateTab, newFolderCmd, deleteFolderCmd, splitWithCmd } from './commands';
+import { setOrientation } from '@shared/split';
 import { ungroupFolder } from '@shared/folders';
 import { getSpace } from '@shared/tree';
 import { dropItem } from '@shared/folders';
@@ -24,6 +25,17 @@ export function itemMenu(id: ID): ContextMenuItem[] {
   const loc = locate(s, id);
   const items: ContextMenuItem[] = [];
 
+  const activeNow = ops.activeItemId(s);
+  if (it.kind === 'tab' && activeNow && activeNow !== id && ['tab', 'split'].includes(s.items[activeNow]?.kind)) {
+    items.push({ label: 'Open in Split View', testId: 'menu-split-with', onSelect: () => splitWithCmd(id) });
+  }
+  if (it.kind === 'split') {
+    items.push(
+      { label: it.orientation === 'row' ? 'Stack Vertically' : 'Side by Side', testId: 'menu-split-flip', onSelect: () => act((d) => setOrientation(d, id, it.orientation === 'row' ? 'column' : 'row')) },
+      { label: 'Separate All Pages', testId: 'menu-unsplit', onSelect: () => act((d) => void ops.unsplit(d, id, now())) },
+      { separator: true, label: '' },
+    );
+  }
   if (it.kind === 'tab') {
     items.push(
       { label: 'Copy URL', testId: 'menu-copy-url', onSelect: () => { selectItem(id); void copyActiveUrl(); } },

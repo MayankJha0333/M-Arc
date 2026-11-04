@@ -9,7 +9,7 @@ import { WebSurface } from './WebSurface';
 import { KiteLogo } from './KiteLogo';
 import { setupPage } from '../pageSetup';
 import { FindBar } from './FindBar';
-import { SplitChrome, splitRects } from './SplitView';
+import { SplitChrome, splitRects, paneStyle } from './SplitView';
 import { NoteEditor } from './NoteEditor';
 import { Peek } from './Peek';
 import { DropZone } from '../dnd';
@@ -40,10 +40,10 @@ export function Stage() {
 
   return (
     <main className="stage" data-testid="stage">
-      <DropZone zone={{ type: 'stage' }} className="card" testId="page-card">
+      <DropZone zone={{ type: 'stage' }} className="card" testId="page-card" data-split={active?.kind === 'split' || undefined}>
         <div className="load-bar" data-on={loading || undefined} />
         {mounted.map((id) => (
-          <SurfaceSlot key={id} id={id} rect={rects[id]} focusedInSplit={active?.kind === 'split' && active.panes[active.focused] === id} />
+          <SurfaceSlot key={id} id={id} rect={rects[id]} inSplit={active?.kind === 'split' && active.panes.includes(id)} focusedInSplit={active?.kind === 'split' && active.panes[active.focused] === id} />
         ))}
         {active?.kind === 'split' && <SplitChrome split={active} />}
         {active?.kind === 'note' && <NoteEditor key={active.id} note={active} />}
@@ -55,14 +55,16 @@ export function Stage() {
   );
 }
 
-function SurfaceSlot({ id, rect, focusedInSplit }: { id: ID; rect?: Rect; focusedInSplit: boolean }) {
+function SurfaceSlot({ id, rect, focusedInSplit, inSplit }: { id: ID; rect?: Rect; focusedInSplit: boolean; inSplit: boolean }) {
   const item = useKite((st) => st.s.items[id]) as Extract<Item, { kind: 'tab' }>;
   const visible = !!rect;
   const style = rect
-    ? { left: `${rect.left}%`, top: `${rect.top}%`, width: `${rect.width}%`, height: `${rect.height}%` }
+    ? inSplit
+      ? paneStyle(rect)
+      : { left: `${rect.left}%`, top: `${rect.top}%`, width: `${rect.width}%`, height: `${rect.height}%` }
     : undefined;
   return (
-    <div className="surface-slot" data-visible={visible || undefined} data-focused={focusedInSplit || undefined} style={style} data-testid={`slot-${id}`}>
+    <div className="surface-slot" data-visible={visible || undefined} data-focused={focusedInSplit || undefined} data-split={inSplit || undefined} style={style} data-testid={`slot-${id}`}>
       <WebSurface
         id={id}
         initialUrl={item.url}

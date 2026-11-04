@@ -7,7 +7,7 @@ import * as ops from '@shared/ops';
 import type { Settings } from '@shared/types';
 import { bridge, isMac } from './platform';
 import { getS, getUi, markLoaded, startAutosave, useKite } from './store';
-import { openUrl, runAction, autoArchiveNow } from './commands';
+import { openUrl, runAction, autoArchiveNow, openInSplit } from './commands';
 import { handleOpenRequest, handleExternalUrl } from './routingRuntime';
 
 /** All shortcuts including the numbered ones (⌘1…⌘9, ⌃1…⌃9). */
@@ -43,6 +43,7 @@ export async function boot() {
   bridge.onShortcut((a) => runAction(a));
   bridge.onOpen((req) => handleOpenRequest(req));
   bridge.onExternalUrl((url) => handleExternalUrl(url));
+  bridge.onOpenSplit(({ url }) => openInSplit(url));
   bridge.onLittleToMain(({ url, spaceId }) => openUrl(url, 'new', { spaceId: spaceId ?? undefined }));
 
   // Keep the main process's copy of shortcuts current (it forwards keys typed inside pages).
