@@ -10,7 +10,6 @@ import {
   Menu,
   nativeTheme,
   shell,
-  webContents as allWebContents,
   type WebContents,
 } from 'electron';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -18,7 +17,6 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { Storage } from './storage';
 import { findAction, toAccelerator } from '../shared/shortcuts';
-import { zapPickerScript } from '../shared/zap';
 import type { OpenRequest } from '../shared/ipc';
 
 const isMac = process.platform === 'darwin';
@@ -263,15 +261,6 @@ function setupIpc() {
     return ok;
   });
   ipcMain.handle('browser:is-default', () => app.isDefaultProtocolClient('https'));
-  ipcMain.handle('zap:start', async (_e, id: number) => {
-    const wc = allWebContents.fromId(id);
-    if (!wc) return null;
-    try {
-      return (await wc.executeJavaScript(zapPickerScript(), true)) as string | null;
-    } catch {
-      return null;
-    }
-  });
   ipcMain.handle('file:export', async (e, name: string, text: string) => {
     const win = BrowserWindow.fromWebContents(e.sender) ?? undefined;
     const res = await dialog.showSaveDialog(win!, { defaultPath: join(app.getPath('downloads'), name) });

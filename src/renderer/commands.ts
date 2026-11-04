@@ -44,6 +44,11 @@ export function openUrl(input: string, where: OpenWhere = 'new', opts: { spaceId
   return id;
 }
 
+let boostHook: () => void = () => setUi({ panel: 'boosts' });
+export function setBoostHook(fn: () => void) {
+  boostHook = fn;
+}
+
 let closePeekHook: () => void = () => setUi({ peek: null });
 export function setClosePeek(fn: () => void) {
   closePeekHook = fn;
@@ -249,6 +254,8 @@ export const actions: Record<string, () => void> = {
   runAutoArchive: () => autoArchiveNow(),
   closePeek: () => closePeekHook(),
   littleWindow: () => bridge.openLittle('kite://new'),
+  boostEditor: () => boostHook(),
+  boostsPanel: () => setUi({ panel: 'boosts' }),
   nextSpace: () => {
     act((d) => stepSpace(d, 1));
     afterSpaceChange();

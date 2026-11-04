@@ -37,6 +37,5 @@ export interface KiteBridge {
   readDefaultArcFile(): Promise<{ path: string; text: string } | null>;
   setDefaultBrowser(): Promise<boolean>;
   isDefaultBrowser(): Promise<boolean>;
-  startZap(webContentsId: number): Promise<string | null>;
   exportFile(name: string, text: string): Promise<boolean>;
 }

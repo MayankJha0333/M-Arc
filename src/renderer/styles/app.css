@@ -2095,3 +2095,136 @@ body.resizing-v * {
   color: var(--ink-3);
   margin: 0;
 }
+
+/* ---- boosts ---- */
+
+.boost-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.url-boost {
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--accent);
+}
+
+.url-boost:hover {
+  background: var(--hover);
+}
+
+.zap-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 3px 4px 3px 9px;
+  border-radius: 8px;
+  background: var(--hover);
+}
+
+.chip code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(11.5px * var(--scale));
+}
+
+.chip button {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-2);
+}
+
+.chip button:hover {
+  background: var(--active);
+}
+
+.warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  color: #b4651f;
+  font-size: calc(11.5px * var(--scale));
+  line-height: 1.4;
+}
+
+.zap-hint {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  z-index: 60;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: #1e1c1a;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  animation: pop-in 0.18s ease-out;
+}
+
+.zap-hint kbd {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.inline-form {
+  display: flex;
+  gap: 8px;
+}
+
+.boost-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.boost-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--hover);
+}
+
+.boost-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.boost-row-text b {
+  font-weight: 600;
+}
+
+.field-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: calc(12.5px * var(--scale));
+}

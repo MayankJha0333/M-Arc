@@ -9,6 +9,7 @@ import { CommandBar } from './components/CommandBar';
 import { ContextMenuHost } from './components/ContextMenu';
 import { Toasts } from './components/Toasts';
 import { Panels } from './components/Panels';
+import { ZapHint } from './components/Boosts';
 import { isElectron, isMac } from './platform';
 
 export function useSystemDark() {
@@ -61,6 +62,7 @@ function Shell() {
       <Stage />
       <CommandBar />
       <Panels />
+      <ZapHint />
       <ContextMenuHost />
       <Toasts />
       {settings.chromeCss && <style data-testid="chrome-css">{settings.chromeCss}</style>}

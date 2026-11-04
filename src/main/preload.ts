@@ -31,7 +31,6 @@ const api: KiteBridge = {
   readDefaultArcFile: () => ipcRenderer.invoke('arc:read-default'),
   setDefaultBrowser: () => ipcRenderer.invoke('browser:set-default'),
   isDefaultBrowser: () => ipcRenderer.invoke('browser:is-default'),
-  startZap: (id) => ipcRenderer.invoke('zap:start', id),
   exportFile: (name, text) => ipcRenderer.invoke('file:export', name, text),
 };
 

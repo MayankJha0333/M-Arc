@@ -1,4 +1,5 @@
-import { ArrowLeft, ArrowRight, RotateCw, PanelLeft, Plus, Lock, Search, Settings2, Archive, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, RotateCw, PanelLeft, Plus, Lock, Search, Settings2, Archive, Sparkles, Wand2 } from 'lucide-react';
+import { boostsFor } from '@shared/boosts';
 import * as ops from '@shared/ops';
 import { displayUrl } from '@shared/url';
 import { activeSpace } from '@shared/tree';
@@ -111,6 +112,7 @@ function NavButtons() {
 
 function UrlPill() {
   const tab = useKite((st) => ops.activeTab(st.s));
+  const boosted = useKite((st) => (tab ? boostsFor(st.s, tab.url).length > 0 : false));
   const secure = tab?.url.startsWith('https:');
   return (
     <button
@@ -122,6 +124,20 @@ function UrlPill() {
     >
       {tab ? secure ? <Lock size={12} className="url-lock" /> : <Search size={12} className="url-lock" /> : <Search size={12} className="url-lock" />}
       <span className="url-text">{tab ? displayUrl(tab.url) : 'Search or enter address'}</span>
+      {boosted && (
+        <span
+          className="url-boost"
+          role="button"
+          title="A Boost is changing this site"
+          data-testid="url-boost"
+          onClick={(e) => {
+            e.stopPropagation();
+            actions.boostEditor();
+          }}
+        >
+          <Wand2 size={12} />
+        </span>
+      )}
     </button>
   );
 }

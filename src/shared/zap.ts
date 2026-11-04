@@ -7,7 +7,8 @@
  */
 export function selectorFor(el: Element): string {
   const esc = (s: string) => (typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(s) : s.replace(/([^a-zA-Z0-9_-])/g, '\\$1'));
-  const looksGenerated = (s: string) => /\d{3,}|^[a-z]{1,3}-[A-Za-z0-9]{5,}$|^_|[A-Z].*[0-9]|^css-|^sc-/.test(s);
+  // Ids/classes made by build tools change between visits, so avoid them.
+  const looksGenerated = (s: string) => /\d{3,}|^[a-z]{1,3}-[A-Za-z0-9]{5,}$|^_|[A-Z].*[0-9]|^css-|^sc-/.test(s) || (s.length >= 6 && s.replace(/\D/g, '').length >= 3);
   const doc = el.ownerDocument;
   const unique = (sel: string) => {
     try {

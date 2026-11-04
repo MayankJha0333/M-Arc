@@ -116,3 +116,23 @@ test('little window: opens as its own window and hands its page to the main wind
   await expect(win.locator('[data-testid="today-list"] [data-title="Kite Test Home"]')).toHaveCount(1, { timeout: 15000 });
   await app.close();
 });
+
+test('Boosts: CSS and zap work inside a real page', async () => {
+  const { app, win } = await launch();
+  await open(win, site.url('/'));
+  await expect(win.locator('[data-title="Kite Test Home"]')).toHaveCount(1, { timeout: 15000 });
+  const wv = win.locator('.surface-slot[data-visible] webview');
+  const inPage = (js: string) => wv.evaluate((el: any, code) => el.executeJavaScript(code), js);
+  await win.keyboard.press(`${MOD}+Alt+b`);
+  await win.getByTestId('boost-css').fill('#h { color: rgb(1, 2, 3) !important; }');
+  await expect.poll(() => inPage('getComputedStyle(document.getElementById("h")).color'), { timeout: 10000 }).toBe('rgb(1, 2, 3)');
+  await win.getByTestId('boost-zap').click();
+  await expect(win.getByTestId('zap-hint')).toBeVisible();
+  const r = JSON.parse(await inPage('JSON.stringify(document.getElementById("ad").getBoundingClientRect())'));
+  const outer = (await wv.boundingBox())!;
+  await win.mouse.move(outer.x + r.x + 10, outer.y + r.y + 10);
+  await win.mouse.click(outer.x + r.x + 10, outer.y + r.y + 10);
+  await expect(win.getByTestId('zap-chip')).toHaveCount(1, { timeout: 10000 });
+  await expect.poll(() => inPage('getComputedStyle(document.getElementById("ad")).display')).toBe('none');
+  await app.close();
+});

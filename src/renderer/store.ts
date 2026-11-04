@@ -7,7 +7,7 @@ import { serialize } from '@shared/persistence';
 import type { AppState, ID } from '@shared/types';
 import { bridge } from './platform';
 
-export type Panel = 'settings' | 'archive' | 'boosts' | 'routing' | 'import' | 'space' | 'shortcuts' | null;
+export type Panel = 'settings' | 'archive' | 'boosts' | 'boost' | 'routing' | 'import' | 'space' | 'shortcuts' | null;
 
 export interface Toast {
   id: number;
@@ -42,6 +42,7 @@ export interface UiState {
   menu: null | { x: number; y: number; items: ContextMenuItem[] };
   sidebarPeek: boolean; // hidden sidebar temporarily shown by hovering the edge
   findOpen: boolean;
+  zapping: boolean;
 }
 
 interface Store {
@@ -70,6 +71,7 @@ export const useKite = create<Store>((set, get) => ({
     menu: null,
     sidebarPeek: false,
     findOpen: false,
+    zapping: false,
   },
   act(fn) {
     let out: ReturnType<typeof fn> | undefined;

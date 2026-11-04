@@ -34,7 +34,6 @@ export interface TestHooks {
   handOver(url: string, spaceId: string | null): void;
   exported: { name: string; text: string }[];
   arcFileText: string | null;
-  zapResult: string | null;
   now: number | null;
 }
 
@@ -57,7 +56,6 @@ function makeWebBridge(): KiteBridge {
     handOver: (url, spaceId) => littleToMain.emit({ url, spaceId }),
     exported: [],
     arcFileText: null,
-    zapResult: null,
     now: null,
   };
   window.__kiteTest = hooks;
@@ -94,7 +92,6 @@ function makeWebBridge(): KiteBridge {
     readDefaultArcFile: async () => (hooks.arcFileText ? { path: '~/Library/Application Support/Arc/StorableSidebar.json', text: hooks.arcFileText } : null),
     setDefaultBrowser: async () => true,
     isDefaultBrowser: async () => false,
-    startZap: async () => hooks.zapResult,
     exportFile: async (name, text) => {
       hooks.exported.push({ name, text });
       return true;
