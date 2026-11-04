@@ -4,7 +4,9 @@ import * as ops from '@shared/ops';
 import { normalizeInput } from '@shared/url';
 import { locate } from '@shared/tree';
 import type { ID } from '@shared/types';
-import { act, getS, getUi, markLoaded, setUi, toast, unload } from './store';
+import { act, getS, getUi, markLoaded, setUi, toast, unload, useKite } from './store';
+import { createFolder, deleteFolder, setAllFolders } from '@shared/folders';
+import type { AppState } from '@shared/types';
 import { surface } from './surfaces';
 import { bridge, now } from './platform';
 
@@ -67,6 +69,26 @@ export function closeItemCmd(id: ID) {
   }
   const next = ops.activeItemId(getS());
   if (next) selectItem(next);
+}
+
+/** Run a change and offer Undo (restores the whole state from before). */
+export function undoable(label: string, fn: (d: AppState) => void) {
+  const before = getS();
+  act(fn);
+  toast(label, 'Undo', () => useKite.setState({ s: before }));
+}
+
+export function newFolderCmd(opts: { items?: ID[]; parentId?: ID | null } = {}) {
+  const id = act((d) => createFolder(d, { now: now(), items: opts.items, parentId: opts.parentId ?? null }));
+  setUi({ renaming: id });
+  return id;
+}
+
+export function deleteFolderCmd(id: ID) {
+  const it = getS().items[id];
+  if (it?.kind !== 'folder') return;
+  const n = it.children.length;
+  undoable(n ? `Deleted “${it.title}” · ${n} item${n === 1 ? '' : 's'} moved to Archive` : `Deleted “${it.title}”`, (d) => void deleteFolder(d, id, now()));
 }
 
 export function reopen() {
@@ -134,6 +156,9 @@ export const actions: Record<string, () => void> = {
     if (id) selectItem(id);
   },
   settings: () => setUi({ panel: 'settings' }),
+  newFolder: () => void newFolderCmd(),
+  collapseFolders: () => act((d) => setAllFolders(d, d.activeSpaceId, true)),
+  expandFolders: () => act((d) => setAllFolders(d, d.activeSpaceId, false)),
   findInPage: () => setUi({ findOpen: true }),
   zoomIn: () => surface(activeTabId())?.zoom(1),
   zoomOut: () => surface(activeTabId())?.zoom(-1),

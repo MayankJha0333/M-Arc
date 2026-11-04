@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronRight } from 'lucide-react';
 import { setUi, useKite, type ContextMenuItem } from '../store';
 
@@ -14,6 +15,18 @@ function MenuList({ items, x, y, onClose, level = 0 }: { items: ContextMenuItem[
   const [pos, setPos] = useState({ x, y });
   const [open, setOpen] = useState<number | null>(null);
   const [focus, setFocus] = useState(-1);
+  // Hover intent: give the pointer time to travel diagonally into an open submenu.
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoverRow = (i: number, hasSub: boolean) => {
+    setFocus(i);
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    if (hasSub) setOpen(i);
+    else closeTimer.current = setTimeout(() => setOpen(null), 280);
+  };
+  const keepSub = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+  };
+  useEffect(() => () => void (closeTimer.current && clearTimeout(closeTimer.current)), []);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -54,7 +67,7 @@ function MenuList({ items, x, y, onClose, level = 0 }: { items: ContextMenuItem[
         it.separator ? (
           <div key={i} className="menu-sep" />
         ) : (
-          <div key={i} className="menu-row-wrap" onMouseEnter={() => { setOpen(it.submenu ? i : null); setFocus(i); }}>
+          <div key={i} className="menu-row-wrap" data-row-index={i} onMouseEnter={() => hoverRow(i, !!it.submenu)}>
             <button
               role="menuitem"
               className={`menu-item${it.danger ? ' danger' : ''}${focus === i ? ' focus' : ''}`}
@@ -74,7 +87,11 @@ function MenuList({ items, x, y, onClose, level = 0 }: { items: ContextMenuItem[
               {it.hint && <span className="menu-hint">{it.hint}</span>}
               {it.submenu && <ChevronRight size={14} className="menu-chev" />}
             </button>
-            {it.submenu && open === i && <SubMenu items={it.submenu} parent={ref} index={i} onClose={onClose} />}
+            {it.submenu && open === i && (
+              <div onMouseEnter={keepSub}>
+                <SubMenu items={it.submenu} parent={ref} index={i} onClose={onClose} />
+              </div>
+            )}
           </div>
         ),
       )}
@@ -83,11 +100,13 @@ function MenuList({ items, x, y, onClose, level = 0 }: { items: ContextMenuItem[
 }
 
 function SubMenu({ items, parent, index, onClose }: { items: ContextMenuItem[]; parent: React.RefObject<HTMLDivElement>; index: number; onClose: () => void }) {
-  const row = parent.current?.querySelectorAll('.menu-row-wrap')[index] as HTMLElement | undefined;
+  const row = parent.current?.querySelector(`[data-row-index="${index}"]`) as HTMLElement | null;
   const r = row?.getBoundingClientRect();
   const pr = parent.current?.getBoundingClientRect();
   if (!r || !pr) return null;
-  return <MenuList items={items} x={pr.right - 4} y={r.top - 5} onClose={onClose} level={1} />;
+  // Rendered outside the parent menu: its backdrop blur would otherwise offset fixed positioning.
+  const host = parent.current?.closest('.app') ?? document.body;
+  return createPortal(<MenuList items={items} x={pr.right - 4} y={r.top - 5} onClose={onClose} level={1} />, host);
 }
 
 export function ContextMenuHost() {

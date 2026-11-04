@@ -1059,3 +1059,22 @@ kbd {
   text-overflow: ellipsis;
   transform: translate(10px, 8px) rotate(-1.5deg);
 }
+
+/* While dragging, pages must not swallow the pointer. */
+body.dragging .surface {
+  pointer-events: none;
+}
+
+.space-more {
+  opacity: 0;
+  width: 24px;
+  height: 24px;
+}
+
+.space-header:hover .space-more {
+  opacity: 1;
+}
+
+.folder-row .row-glyph {
+  color: var(--accent);
+}

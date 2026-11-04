@@ -30,7 +30,7 @@ function FavTile({ id }: { id: ID }) {
   const it = useKite((st) => st.s.items[id]);
   const active = useKite((st) => st.s.activeBySpace[st.s.activeSpaceId] === id);
   const loaded = useKite((st) => st.ui.loaded.includes(id));
-  const drag = useDragRow(id, false);
+  const drag = useDragRow(id, false, 'x');
   if (!it || it.kind !== 'tab') return null;
   return (
     <button

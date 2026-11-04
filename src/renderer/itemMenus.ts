@@ -5,7 +5,10 @@ import { locate } from '@shared/tree';
 import type { ID } from '@shared/types';
 import type { ContextMenuItem } from './store';
 import { act, getS, setUi } from './store';
-import { closeItemCmd, selectItem, copyActiveUrl, navigateTab } from './commands';
+import { closeItemCmd, selectItem, copyActiveUrl, navigateTab, newFolderCmd, deleteFolderCmd } from './commands';
+import { ungroupFolder } from '@shared/folders';
+import { getSpace } from '@shared/tree';
+import { dropItem } from '@shared/folders';
 import { formatShortcut } from '@shared/shortcuts';
 import { isMac } from './platform';
 import { now } from './platform';
@@ -49,9 +52,47 @@ export function itemMenu(id: ID): ContextMenuItem[] {
     );
   }
   items.push({ separator: true, label: '' });
+  if (it.kind !== 'folder' && loc?.list !== 'favorites') {
+    const folders = foldersIn(loc?.spaceId ?? s.activeSpaceId).filter((f) => f.id !== loc?.parentId);
+    items.push({
+      label: 'Move to Folder',
+      testId: 'menu-move-folder',
+      submenu: [
+        { label: 'New Folder…', testId: 'menu-new-folder-with', onSelect: () => newFolderCmd({ items: [id] }) },
+        ...(folders.length ? [{ separator: true, label: '' }] : []),
+        ...folders.map((f) => ({ label: `${'  '.repeat(f.depth)}${f.title}`, testId: `menu-folder-${f.id}`, onSelect: () => act((d) => dropItem(d, id, { type: 'into', folderId: f.id })) })),
+      ],
+    });
+  }
+  if (it.kind === 'folder') {
+    items.push(
+      { label: 'New Folder Inside', testId: 'menu-subfolder', onSelect: () => newFolderCmd({ parentId: id }) },
+      { label: it.collapsed ? 'Expand' : 'Collapse', onSelect: () => act((d) => ops.toggleFolder(d, id)) },
+      { label: 'Ungroup (keep contents)', testId: 'menu-ungroup', onSelect: () => act((d) => ungroupFolder(d, id)) },
+      { separator: true, label: '' },
+      { label: 'Delete Folder…', danger: true, testId: 'menu-delete-folder', onSelect: () => deleteFolderCmd(id) },
+    );
+  }
   if (it.kind !== 'folder') {
     const keeps = it.kind === 'tab' && (loc?.list === 'pinned' || loc?.list === 'favorites');
     items.push({ label: keeps ? 'Close (keep in sidebar)' : 'Close', hint: '', testId: 'menu-close', onSelect: () => closeItemCmd(id) });
   }
   return items;
+}
+
+/** Every folder in a Space, depth-first, for the "Move to Folder" menu. */
+function foldersIn(spaceId: ID): { id: ID; title: string; depth: number }[] {
+  const s = getS();
+  const out: { id: ID; title: string; depth: number }[] = [];
+  const walk = (ids: ID[], depth: number) => {
+    for (const x of ids) {
+      const f = s.items[x];
+      if (f?.kind === 'folder') {
+        out.push({ id: x, title: f.title, depth });
+        walk(f.children, depth + 1);
+      }
+    }
+  };
+  walk(getSpace(s, spaceId).pinned, 0);
+  return out;
 }
