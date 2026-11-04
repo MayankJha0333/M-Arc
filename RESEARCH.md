@@ -200,3 +200,28 @@ item  = { id, parentID, childrenIds: [...], title, createdAt, isUnread,
 - **REA 6.7.0** via its command line (`npx rea-agents@6.7.0`): `doctor`, `analyze-javascript-application` (worked); `inspect-macho`, `inspect-plist`, `demangle-swift` (refused — need a macOS host).
 - `strings` on the Arc program file (944k lines of text), Arc's `Info.plist`, resource bundles, AppleScript dictionary.
 - **Nothing from Arc goes into the new app** — only behavior notes. No code, name, logo or icons.
+
+---
+
+## 6. Build status (Kite, 4 Nov 2026)
+
+Every feature in §3 was rebuilt from these notes, written fresh. See README.md for how to run it.
+
+| Feature | Built | Differences from Arc |
+|---|---|---|
+| Sidebar tabs, Favorites, pinned tabs, folders | ✅ | Favorites are shared by all Spaces (Kite has no profiles) |
+| Auto-archive + Archive | ✅ | Same choices (1h … 30d, never), per-Space override |
+| Spaces | ✅ | Two-colour themes, light/dark/auto, grain |
+| Command bar | ✅ | No ChatGPT (offline) |
+| Split View | ✅ | 2–4 panes, rows or columns |
+| Peek | ✅ | Pinned-tab external links + shift-click |
+| Little window | ✅ | Global hotkey ⌘⌥N |
+| Boosts | ✅ | CSS, font, zap, script; sharing by file (scripts never shared) |
+| Link routing | ✅ | Rules → Space / little window / current Space |
+| Notes | ✅ | Rich text, Markdown export |
+| Arc import | ✅ | Reads `StorableSidebar.json` (both layouts in §2a); Arc note text isn't readable, so notes import by title |
+| Easels, Live Folders, sync, profiles, AI | ❌ | Left out on purpose (online-only or out of scope) |
+
+**Still to confirm with your real file:** the exact nesting in §2a. The importer accepts
+both known layouts and reports anything it skips, so a mismatch shows up as a clear
+message, not lost data.

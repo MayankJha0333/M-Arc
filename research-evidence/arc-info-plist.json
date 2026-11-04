@@ -1,0 +1,10 @@
+{
+  "CFBundleIdentifier": "company.thebrowser.Browser",
+  "CFBundleShortVersionString": "1.171.0",
+  "CFBundleVersion": "89666",
+  "BCNYBuildDate": "28 Oct 2026, 20:46",
+  "LSMinimumSystemVersion": "13.0.0",
+  "NSPrincipalClass": "Arc.BrowserApp",
+  "OSAScriptingDefinition": "Arc.sdef",
+  "SUFeedURL": "https://releases.arc.net/updates.xml"
+}

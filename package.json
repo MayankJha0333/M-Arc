@@ -18,9 +18,12 @@
     "test:e2e": "playwright test -c playwright.web.config.ts",
     "test:electron": "npm run build && playwright test -c playwright.electron.config.ts",
     "test:all": "npm run typecheck && npm test && npm run test:e2e && npm run test:electron",
-    "dist": "npm run build && electron-builder --mac"
+    "dist": "npm run build && electron-builder --mac",
+    "dist:dir": "npm run build && electron-builder --dir",
+    "icon": "node scripts/make-icon.mjs"
   },
-  "dependencies": {
+  "dependencies": {},
+  "devDependencies": {
     "@fontsource/bricolage-grotesque": "^5.1.0",
     "@fontsource/figtree": "^5.1.1",
     "@tiptap/extension-link": "^2.10.3",
@@ -35,9 +38,7 @@
     "nanoid": "^5.0.9",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "zustand": "^4.5.5"
-  },
-  "devDependencies": {
+    "zustand": "^4.5.5",
     "@playwright/test": "^1.63.0",
     "@types/jsdom": "^21.1.7",
     "@types/node": "^22.10.1",
@@ -51,5 +52,74 @@
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
     "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "build": {
+    "appId": "com.mayankjha.kite",
+    "productName": "Kite",
+    "copyright": "Copyright © 2026 Mayank Jha",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "darkModeSupport": true,
+      "hardenedRuntime": true,
+      "extendInfo": {
+        "NSCameraUsageDescription": "Websites you allow can use your camera.",
+        "NSMicrophoneUsageDescription": "Websites you allow can use your microphone.",
+        "NSLocationUsageDescription": "Websites you allow can use your location.",
+        "NSDownloadsFolderUsageDescription": "Kite saves exports and downloads here."
+      }
+    },
+    "protocols": [
+      {
+        "name": "Web page",
+        "schemes": [
+          "http",
+          "https"
+        ]
+      }
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "html",
+          "htm"
+        ],
+        "name": "HTML document",
+        "role": "Viewer"
+      }
+    ],
+    "linux": {
+      "target": "dir",
+      "icon": "build/icon.png",
+      "category": "Network"
+    }
   }
 }
