@@ -16,6 +16,7 @@ export interface SurfaceEvents {
   onOpen?(url: string, background: boolean): void;
   onReady(handle: SurfaceHandle, url: string): void;
   onFocus?(): void;
+  onEscape?(): void;
 }
 
 interface Props extends SurfaceEvents {
@@ -64,6 +65,7 @@ function ElectronSurface({ id, initialUrl, visible, ...ev }: Props) {
       insertCSS: (css) => wv.insertCSS(css),
       removeCSS: (key) => wv.removeInsertedCSS(key),
       webContentsId: () => wcId,
+      focus: () => wv.focus(),
     };
     const unregister = registerSurface(id, handle);
     const onReady = () => {
@@ -208,6 +210,7 @@ function SimulatedSurface({ id, initialUrl, visible, ...ev }: Props) {
         css.current.delete(key);
       },
       webContentsId: () => null,
+      focus: () => frame.contentWindow?.focus(),
     };
     const unregister = registerSurface(id, handle);
     const onLoad = () => {
@@ -232,6 +235,11 @@ function SimulatedSurface({ id, initialUrl, visible, ...ev }: Props) {
       });
       // Like Electron's main process: pass modifier key presses up to the app.
       doc.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && id.startsWith('peek:')) {
+          e.preventDefault();
+          evRef.current.onEscape?.();
+          return;
+        }
         if (!e.metaKey && !e.ctrlKey && !e.altKey) return;
         const copy = new KeyboardEvent('keydown', { key: e.key, code: e.code, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey, shiftKey: e.shiftKey, bubbles: true, cancelable: true });
         window.dispatchEvent(copy);

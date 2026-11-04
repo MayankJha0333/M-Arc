@@ -7,7 +7,7 @@ import { actions, openUrl } from '../commands';
 import { isMac, now } from '../platform';
 import { WebSurface } from './WebSurface';
 import { KiteLogo } from './KiteLogo';
-import { setupPage } from '../pageSetup';
+import { setupPage, usePolicySync } from '../pageSetup';
 import { FindBar } from './FindBar';
 import { SplitChrome, splitRects, paneStyle } from './SplitView';
 import { NoteEditor } from './NoteEditor';
@@ -57,6 +57,7 @@ export function Stage() {
 
 function SurfaceSlot({ id, rect, focusedInSplit, inSplit }: { id: ID; rect?: Rect; focusedInSplit: boolean; inSplit: boolean }) {
   const item = useKite((st) => st.s.items[id]) as Extract<Item, { kind: 'tab' }>;
+  usePolicySync(id, false);
   const visible = !!rect;
   const style = rect
     ? inSplit

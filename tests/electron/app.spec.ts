@@ -67,3 +67,29 @@ test('target=_blank links open a new Kite tab', async () => {
   await expect(win.locator('[data-title="Page Two"]')).toHaveCount(1, { timeout: 15000 });
   await app.close();
 });
+
+test('Peek: a pinned tab’s link to another site opens in Peek (real page)', async () => {
+  const { app, win } = await launch();
+  await open(win, site.url('/'));
+  await expect(win.locator('[data-title="Kite Test Home"]')).toHaveCount(1, { timeout: 15000 });
+  await win.keyboard.press(`${MOD}+d`);
+  await expect(win.locator('[data-testid="pinned-list"] [data-title]')).toHaveCount(1);
+  // Real click inside the page (goes through the injected link catcher).
+  const wv = win.locator('.surface-slot[data-visible] webview');
+  const box = await wv.evaluate((el: any) => el.executeJavaScript('JSON.stringify(document.getElementById("external").getBoundingClientRect())'));
+  const r = JSON.parse(box);
+  const outer = (await wv.boundingBox())!;
+  await win.mouse.click(outer.x + r.x + r.width / 2, outer.y + r.y + r.height / 2);
+  await expect(win.getByTestId('peek')).toBeVisible({ timeout: 10000 });
+  await expect(win.getByTestId('peek-url')).toContainText('localhost', { timeout: 10000 });
+  await expect(win.getByTestId('url-pill')).toContainText('127.0.0.1');
+  await app.close();
+});
+
+test('the built UI has a strict Content-Security-Policy', async () => {
+  const { app, win } = await launch();
+  const csp = await win.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
+  expect(csp).toContain("script-src 'self'");
+  expect(csp).not.toContain('unsafe-eval');
+  await app.close();
+});

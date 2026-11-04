@@ -127,6 +127,12 @@ function hardenWebview(contents: WebContents) {
 
   contents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return;
+    const page = pages.get(contents.id);
+    if (input.key === 'Escape' && page?.tabId.startsWith('peek:') && !input.meta && !input.control && !input.alt) {
+      event.preventDefault();
+      page.host.send('shortcut', 'closePeek');
+      return;
+    }
     if (!input.meta && !input.control && !input.alt) return;
     const action = findAction(
       { key: input.key, code: input.code, metaKey: input.meta, ctrlKey: input.control, altKey: input.alt, shiftKey: input.shift },

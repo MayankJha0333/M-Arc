@@ -1,18 +1,18 @@
 // Runs every time a page finishes loading: installs the link catcher
 // (for Peek / little window) and applies matching Boosts.
 
-import { linkCatcherScript } from '@shared/links';
+import { useEffect, useRef } from 'react';
+import { linkCatcherScript, type LinkPolicy } from '@shared/links';
 import { locate, ownerSplit } from '@shared/tree';
 import { hostOf } from '@shared/url';
-import type { ID } from '@shared/types';
-import { getS } from './store';
+import type { AppState, ID } from '@shared/types';
+import { getS, useKite } from './store';
 import { isMac } from './platform';
-import type { SurfaceHandle } from './surfaces';
+import { surface, type SurfaceHandle } from './surfaces';
 import { applyBoosts } from './boostRuntime';
 
 /** Host a pinned/favorite tab "belongs" to, or null for normal tabs. */
-export function pinnedHostFor(tabId: ID): string | null {
-  const s = getS();
+export function pinnedHostFor(tabId: ID, s: AppState = getS()): string | null {
   const tab = s.items[tabId];
   if (!tab || tab.kind !== 'tab') return null;
   let loc = locate(s, tabId);
@@ -24,15 +24,30 @@ export function pinnedHostFor(tabId: ID): string | null {
   return hostOf(tab.homeUrl ?? tab.url) || null;
 }
 
-export function setupPage(tabId: ID, handle: SurfaceHandle, url: string, isPeek: boolean) {
-  const s = getS();
-  const policy = {
-    pinnedHost: isPeek ? null : pinnedHostFor(tabId),
+export function policyFor(tabId: ID, isPeek: boolean, s: AppState = getS()): LinkPolicy {
+  return {
+    pinnedHost: isPeek ? null : pinnedHostFor(tabId, s),
     peekOnExternal: s.settings.peekOnExternalLinksFromPinned,
     peekOnShift: s.settings.peekOnShiftClick,
     isPeek,
     isMac,
   };
-  handle.exec(linkCatcherScript(policy)).catch(() => undefined);
+}
+
+export function setupPage(tabId: ID, handle: SurfaceHandle, url: string, isPeek: boolean) {
+  handle.exec(linkCatcherScript(policyFor(tabId, isPeek))).catch(() => undefined);
   void applyBoosts(tabId, handle, url);
+}
+
+/** Keep a live page's link rules in sync when the tab is pinned/unpinned or settings change. */
+export function usePolicySync(tabId: ID, isPeek: boolean) {
+  const key = useKite((st) => JSON.stringify(policyFor(tabId, isPeek, st.s)));
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    surface(tabId)?.exec(linkCatcherScript(JSON.parse(key))).catch(() => undefined);
+  }, [key, tabId]);
 }

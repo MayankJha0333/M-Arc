@@ -16,6 +16,7 @@ export interface SurfaceHandle {
   insertCSS(css: string): Promise<string | null>;
   removeCSS(key: string): Promise<void>;
   webContentsId(): number | null;
+  focus(): void;
 }
 
 const surfaces = new Map<ID, SurfaceHandle>();

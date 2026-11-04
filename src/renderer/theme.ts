@@ -87,6 +87,6 @@ export function themeVars(theme: SpaceTheme, settings: Settings, systemDark: boo
     '--gap': `${settings.gap}px`,
     '--sidebar-w': `${settings.sidebarWidth}px`,
     '--row-h': `${ROW[settings.density]}px`,
-    'color-scheme': dark ? 'dark' : 'light',
+    colorScheme: dark ? 'dark' : 'light',
   };
 }

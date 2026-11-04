@@ -44,6 +44,11 @@ export function openUrl(input: string, where: OpenWhere = 'new', opts: { spaceId
   return id;
 }
 
+let closePeekHook: () => void = () => setUi({ peek: null });
+export function setClosePeek(fn: () => void) {
+  closePeekHook = fn;
+}
+
 /** Open a page next to the current one (makes or grows a split view). */
 export function openInSplit(url: string): ID | null {
   const id = act((d) => split.openInSplit(d, url, now()));
@@ -178,7 +183,7 @@ export const actions: Record<string, () => void> = {
   },
   closeTab: () => {
     const ui = getUi();
-    if (ui.peek) return setUi({ peek: null });
+    if (ui.peek) return closePeekHook();
     if (ui.commandBar) return setUi({ commandBar: null });
     const id = activeId();
     if (id) closeItemCmd(id);
@@ -242,6 +247,7 @@ export const actions: Record<string, () => void> = {
     setUi({ loaded: loaded.filter((id) => getS().items[id]) });
   },
   runAutoArchive: () => autoArchiveNow(),
+  closePeek: () => closePeekHook(),
   nextSpace: () => {
     act((d) => stepSpace(d, 1));
     afterSpaceChange();
