@@ -2228,3 +2228,51 @@ body.resizing-v * {
   font-weight: 600;
   font-size: calc(12.5px * var(--scale));
 }
+
+/* ---- routing ---- */
+
+.routes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.routes-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.route-row {
+  display: grid;
+  grid-template-columns: 150px 1fr auto 170px auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--hover);
+  opacity: 0.55;
+}
+
+.route-row[data-enabled] {
+  opacity: 1;
+}
+
+.route-arrow {
+  color: var(--ink-3);
+  font-weight: 700;
+}
+
+.route-btns {
+  display: flex;
+}
+
+.add-route {
+  align-self: flex-start;
+}
+
+.route-result {
+  display: block;
+  margin-top: 8px;
+  color: var(--ink-2);
+}

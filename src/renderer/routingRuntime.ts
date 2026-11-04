@@ -3,6 +3,8 @@
 
 import type { OpenRequest } from '@shared/ipc';
 import { openUrl } from './commands';
+import { routeFor } from '@shared/routing';
+import { getS, toast } from './store';
 
 export function handleOpenRequest(req: OpenRequest) {
   switch (req.disposition) {
@@ -20,6 +22,19 @@ export function handleOpenRequest(req: OpenRequest) {
   }
 }
 
+/** A link arrived from another app (Kite is the default browser). */
 export function handleExternalUrl(url: string) {
+  const s = getS();
+  const { target } = routeFor(s, url);
+  if (target.type === 'little') {
+    openUrl(url, 'little');
+    return;
+  }
+  if (target.type === 'space') {
+    const sp = s.spaces.find((x) => x.id === target.spaceId);
+    openUrl(url, 'new', { spaceId: target.spaceId });
+    if (sp && sp.id !== s.activeSpaceId) toast(`Opened in ${sp.icon} ${sp.name}`);
+    return;
+  }
   openUrl(url, 'new');
 }

@@ -31,10 +31,10 @@ export function startSite(): Promise<{ server: Server; url: (path?: string) => s
   );
 }
 
-export async function launch(userData?: string): Promise<{ app: ElectronApplication; win: Page; userData: string }> {
+export async function launch(userData?: string, extraArgs: string[] = []): Promise<{ app: ElectronApplication; win: Page; userData: string }> {
   const dir = userData ?? mkdtempSync(join(tmpdir(), 'kite-e2e-'));
   const app = await electron.launch({
-    args: ['.', '--no-sandbox'],
+    args: ['.', '--no-sandbox', ...extraArgs],
     env: { ...process.env, KITE_USER_DATA: dir, KITE_TEST: '1' },
   });
   const win = await app.firstWindow();

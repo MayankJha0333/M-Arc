@@ -136,3 +136,12 @@ test('Boosts: CSS and zap work inside a real page', async () => {
   await expect.poll(() => inPage('getComputedStyle(document.getElementById("ad")).display')).toBe('none');
   await app.close();
 });
+
+test('routing: a link handed to Kite at launch opens in a little window (default rule)', async () => {
+  const link = site.url('/two');
+  const { app } = await launch(undefined, [link]);
+  await expect.poll(() => app.windows().length, { timeout: 15000 }).toBe(2);
+  const little = app.windows().find((w) => w.url().includes('mode=little'))!;
+  await expect(little.getByTestId('little-url')).toContainText('Page Two', { timeout: 15000 });
+  await app.close();
+});

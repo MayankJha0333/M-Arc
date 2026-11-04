@@ -2,6 +2,7 @@ import { useKite } from '../store';
 import { SpaceEditor } from './Spaces';
 import { ArchivePage } from './ArchivePage';
 import { BoostEditor, BoostsList } from './Boosts';
+import { RoutingPanel } from './Routing';
 
 /** Side sheets (Settings, Archive, Boosts, Space editor…). */
 export function Panels() {
@@ -11,5 +12,6 @@ export function Panels() {
   if (panel === 'archive') return <ArchivePage />;
   if (panel === 'boost' && arg) return <BoostEditor key={arg} id={arg} />;
   if (panel === 'boosts') return <BoostsList />;
+  if (panel === 'routing') return <RoutingPanel />;
   return null;
 }

@@ -256,6 +256,7 @@ export const actions: Record<string, () => void> = {
   littleWindow: () => bridge.openLittle('kite://new'),
   boostEditor: () => boostHook(),
   boostsPanel: () => setUi({ panel: 'boosts' }),
+  routingPanel: () => setUi({ panel: 'routing' }),
   nextSpace: () => {
     act((d) => stepSpace(d, 1));
     afterSpaceChange();

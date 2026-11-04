@@ -9,6 +9,14 @@ function listen<T>(channel: string, cb: (v: T) => void): () => void {
   return () => ipcRenderer.removeListener(channel, fn);
 }
 
+/** Links from other apps can arrive before the UI is listening; keep them until it is. */
+const pendingExternal: string[] = [];
+let externalListener: ((url: string) => void) | null = null;
+ipcRenderer.on('external-url', (_e, url: string) => {
+  if (externalListener) externalListener(url);
+  else pendingExternal.push(url);
+});
+
 const api: KiteBridge = {
   isElectron: true,
   platform: process.platform,
@@ -20,7 +28,13 @@ const api: KiteBridge = {
   onShortcut: (cb) => listen<string>('shortcut', cb),
   onOpen: (cb) => listen<OpenRequest>('open-request', cb),
   onOpenSplit: (cb) => listen<{ url: string; sourceTabId: string }>('open-split', cb),
-  onExternalUrl: (cb) => listen<string>('external-url', cb),
+  onExternalUrl: (cb) => {
+    externalListener = cb;
+    while (pendingExternal.length) cb(pendingExternal.shift()!);
+    return () => {
+      if (externalListener === cb) externalListener = null;
+    };
+  },
   onLittleToMain: (cb) => listen<{ url: string; spaceId: string | null }>('little-to-main', cb),
   openLittle: (url) => ipcRenderer.send('little:open', url),
   moveLittleToMain: (url, spaceId) => ipcRenderer.send('little:to-main', url, spaceId),
