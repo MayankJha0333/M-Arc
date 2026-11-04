@@ -7,3 +7,6 @@ import type { SurfaceHandle } from './surfaces';
 export async function applyBoosts(_tabId: ID, _handle: SurfaceHandle, _url: string): Promise<void> {
   // Boosts arrive in a later step.
 }
+
+/** Same, for windows that don't own the saved state (the little window). */
+export async function applyBoostsWith(_state: unknown, _handle: SurfaceHandle, _url: string): Promise<void> {}

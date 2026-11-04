@@ -45,6 +45,11 @@ export async function boot() {
   bridge.onExternalUrl((url) => handleExternalUrl(url));
   bridge.onOpenSplit(({ url }) => openInSplit(url));
   bridge.onLittleToMain(({ url, spaceId }) => openUrl(url, 'new', { spaceId: spaceId ?? undefined }));
+  bridge.onLittleArchived(({ url, title }) =>
+    useKite.getState().act((d) => {
+      d.archive.unshift({ id: `arc_little_${Date.now()}`, title, url, kind: 'tab', spaceId: d.activeSpaceId, archivedAt: Date.now(), reason: 'auto' });
+    }),
+  );
 
   // Keep the main process's copy of shortcuts current (it forwards keys typed inside pages).
   let lastMap = '';

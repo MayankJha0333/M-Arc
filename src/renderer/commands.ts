@@ -248,6 +248,7 @@ export const actions: Record<string, () => void> = {
   },
   runAutoArchive: () => autoArchiveNow(),
   closePeek: () => closePeekHook(),
+  littleWindow: () => bridge.openLittle('kite://new'),
   nextSpace: () => {
     act((d) => stepSpace(d, 1));
     afterSpaceChange();

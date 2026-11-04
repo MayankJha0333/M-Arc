@@ -30,6 +30,9 @@ export interface KiteBridge {
   /** From a little window: hand the page to the main window. */
   moveLittleToMain(url: string, spaceId: string | null): void;
   onLittleInit(cb: (init: LittleInit) => void): () => void;
+  /** A little window archived itself; the main window records it. */
+  archiveFromLittle(url: string, title: string): void;
+  onLittleArchived(cb: (v: { url: string; title: string }) => void): () => void;
   pickArcFile(): Promise<{ path: string; text: string } | null>;
   readDefaultArcFile(): Promise<{ path: string; text: string } | null>;
   setDefaultBrowser(): Promise<boolean>;

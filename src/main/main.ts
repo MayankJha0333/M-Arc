@@ -239,6 +239,9 @@ function setupIpc() {
     win.focus();
     BrowserWindow.fromWebContents(e.sender)?.close();
   });
+  ipcMain.on('little:archive', (_e, url: string, title: string) => {
+    mainWindow?.webContents.send('little-archived', { url, title });
+  });
   ipcMain.handle('arc:pick', async (e) => {
     const win = BrowserWindow.fromWebContents(e.sender) ?? undefined;
     const res = await dialog.showOpenDialog(win!, {

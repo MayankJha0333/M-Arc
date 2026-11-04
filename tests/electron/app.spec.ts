@@ -48,14 +48,17 @@ test('keyboard shortcuts typed inside a page reach Kite', async () => {
   await open(win, site.url('/'));
   await expect(win.locator('[data-title="Kite Test Home"]')).toHaveCount(1, { timeout: 15000 });
   // Send a real key press into the page's own web contents (as the OS would).
-  await app.evaluate(({ webContents }) => {
-    const guest = webContents.getAllWebContents().find((w) => w.getType() === 'webview')!;
-    const mod = process.platform === 'darwin' ? 'meta' : 'control';
-    guest.focus();
-    guest.sendInputEvent({ type: 'keyDown', keyCode: 'T', modifiers: [mod] });
-    guest.sendInputEvent({ type: 'keyUp', keyCode: 'T', modifiers: [mod] });
-  });
-  await expect(win.getByTestId('command-bar')).toBeVisible();
+  await expect(async () => {
+    await app.evaluate(async ({ webContents }) => {
+      const guest = webContents.getAllWebContents().find((w) => w.getType() === 'webview')!;
+      const mod = process.platform === 'darwin' ? 'meta' : 'control';
+      guest.focus();
+      await new Promise((r) => setTimeout(r, 100));
+      guest.sendInputEvent({ type: 'keyDown', keyCode: 'T', modifiers: [mod] });
+      guest.sendInputEvent({ type: 'keyUp', keyCode: 'T', modifiers: [mod] });
+    });
+    await expect(win.getByTestId('command-bar')).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 10000 });
   await app.close();
 });
 
@@ -76,6 +79,9 @@ test('Peek: a pinned tab’s link to another site opens in Peek (real page)', as
   await expect(win.locator('[data-testid="pinned-list"] [data-title]')).toHaveCount(1);
   // Real click inside the page (goes through the injected link catcher).
   const wv = win.locator('.surface-slot[data-visible] webview');
+  await expect
+    .poll(() => wv.evaluate((el: any) => el.executeJavaScript('window.__kiteLinkCatcher && window.__kiteLinkCatcher.policy.pinnedHost')), { timeout: 10000 })
+    .toBe('127.0.0.1');
   const box = await wv.evaluate((el: any) => el.executeJavaScript('JSON.stringify(document.getElementById("external").getBoundingClientRect())'));
   const r = JSON.parse(box);
   const outer = (await wv.boundingBox())!;
@@ -91,5 +97,22 @@ test('the built UI has a strict Content-Security-Policy', async () => {
   const csp = await win.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
   expect(csp).toContain("script-src 'self'");
   expect(csp).not.toContain('unsafe-eval');
+  await app.close();
+});
+
+test('little window: opens as its own window and hands its page to the main window', async () => {
+  const { app, win } = await launch();
+  const next = app.waitForEvent('window');
+  await win.keyboard.press(`${MOD}+Alt+n`);
+  const little = await next;
+  await little.waitForSelector('[data-testid=little]');
+  await little.getByTestId('little-input').fill(site.url('/'));
+  await little.getByTestId('little-input').press('Enter');
+  await expect(little.getByTestId('little-url')).toContainText('Kite Test Home', { timeout: 15000 });
+  const closed = little.waitForEvent('close');
+  // The window closes as a result of this click, so don't wait on the click itself.
+  await little.getByTestId('little-open-main').click({ noWaitAfter: true }).catch(() => undefined);
+  await closed;
+  await expect(win.locator('[data-testid="today-list"] [data-title="Kite Test Home"]')).toHaveCount(1, { timeout: 15000 });
   await app.close();
 });

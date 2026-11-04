@@ -25,6 +25,8 @@ const api: KiteBridge = {
   openLittle: (url) => ipcRenderer.send('little:open', url),
   moveLittleToMain: (url, spaceId) => ipcRenderer.send('little:to-main', url, spaceId),
   onLittleInit: (cb: (i: LittleInit) => void) => listen<LittleInit>('little-init', cb),
+  archiveFromLittle: (url, title) => ipcRenderer.send('little:archive', url, title),
+  onLittleArchived: (cb) => listen<{ url: string; title: string }>('little-archived', cb),
   pickArcFile: () => ipcRenderer.invoke('arc:pick'),
   readDefaultArcFile: () => ipcRenderer.invoke('arc:read-default'),
   setDefaultBrowser: () => ipcRenderer.invoke('browser:set-default'),

@@ -29,6 +29,9 @@ export interface TestHooks {
   shortcut(action: string): void;
   openRequest(req: OpenRequest): void;
   littleOpened: string[];
+  littleMoved: { url: string; spaceId: string | null }[];
+  littleArchived(url: string, title: string): void;
+  handOver(url: string, spaceId: string | null): void;
   exported: { name: string; text: string }[];
   arcFileText: string | null;
   zapResult: string | null;
@@ -43,11 +46,15 @@ function makeWebBridge(): KiteBridge {
   const external = new Emitter<string>();
   const split = new Emitter<{ url: string; sourceTabId: string }>();
   const littleToMain = new Emitter<{ url: string; spaceId: string | null }>();
+  const littleArchived = new Emitter<{ url: string; title: string }>();
   const hooks: TestHooks = {
     externalUrl: (u) => external.emit(u),
     shortcut: (a) => shortcut.emit(a),
     openRequest: (r) => open.emit(r),
     littleOpened: [],
+    littleMoved: [],
+    littleArchived: (url, title) => littleArchived.emit({ url, title }),
+    handOver: (url, spaceId) => littleToMain.emit({ url, spaceId }),
     exported: [],
     arcFileText: null,
     zapResult: null,
@@ -76,7 +83,12 @@ function makeWebBridge(): KiteBridge {
     openLittle: (url) => {
       hooks.littleOpened.push(url);
     },
-    moveLittleToMain: (url, spaceId) => littleToMain.emit({ url, spaceId }),
+    moveLittleToMain: (url, spaceId) => {
+      hooks.littleMoved.push({ url, spaceId });
+      littleToMain.emit({ url, spaceId });
+    },
+    archiveFromLittle: (url, title) => littleArchived.emit({ url, title }),
+    onLittleArchived: (cb) => littleArchived.on(cb),
     onLittleInit: () => () => undefined,
     pickArcFile: async () => (hooks.arcFileText ? { path: 'StorableSidebar.json', text: hooks.arcFileText } : null),
     readDefaultArcFile: async () => (hooks.arcFileText ? { path: '~/Library/Application Support/Arc/StorableSidebar.json', text: hooks.arcFileText } : null),
