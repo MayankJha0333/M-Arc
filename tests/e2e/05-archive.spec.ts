@@ -25,7 +25,7 @@ test.describe('auto-archive', () => {
     await expect(todayRows(page)).toHaveCount(1);
     await expect(todayRows(page).first()).toHaveAttribute('data-title', 'current.com');
     await expect(pinnedRows(page)).toHaveCount(1);
-    await expect(page.getByTestId('toast').first()).toContainText('Auto-archived 1 tab');
+    await expect(page.getByTestId('toast').filter({ hasText: 'Auto-archived 1 tab' })).toHaveCount(1);
   });
 
   test('the toast opens the Archive and restoring brings the tab back', async ({ page }) => {
@@ -76,7 +76,7 @@ test.describe('archive page', () => {
     await page.getByTestId('btn-clear-today').click();
     await expect(todayRows(page)).toHaveCount(0);
     await expect(page.getByTestId('empty-state')).toBeVisible();
-    await expect(page.getByTestId('toast').first()).toContainText('Archived 3 tabs');
+    await expect(page.getByTestId('toast').filter({ hasText: 'Archived 3 tabs' })).toHaveCount(1);
     await page.getByTestId('toast').getByText('Undo').click();
     await expect(todayRows(page)).toHaveCount(3);
   });

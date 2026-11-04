@@ -6,13 +6,13 @@ import { locate } from '@shared/tree';
 import type { ID } from '@shared/types';
 import { act, getS, getUi, markLoaded, setUi, toast, unload, useKite } from './store';
 import { createFolder, deleteFolder, setAllFolders } from '@shared/folders';
-import { nthSpace, stepSpace, switchSpace } from '@shared/spaces';
+import { createSpace, nthSpace, stepSpace, switchSpace } from '@shared/spaces';
 import { clearToday, runAutoArchive } from '@shared/archive';
 import type { AppState } from '@shared/types';
 import { surface } from './surfaces';
 import { bridge, now } from './platform';
 
-export type OpenWhere = 'current' | 'new' | 'background' | 'peek' | 'little';
+export type OpenWhere = 'current' | 'new' | 'background' | 'peek' | 'little' | 'split';
 
 /** Open a URL (or search) somewhere. */
 export function openUrl(input: string, where: OpenWhere = 'new', opts: { spaceId?: ID; sourceTabId?: string | null } = {}): ID | null {
@@ -22,6 +22,9 @@ export function openUrl(input: string, where: OpenWhere = 'new', opts: { spaceId
   if (where === 'little') {
     bridge.openLittle(url);
     return null;
+  }
+  if (where === 'split') {
+    return openInSplit(url);
   }
   if (where === 'peek') {
     setUi({ peek: { url, sourceTabId: opts.sourceTabId ?? null } });
@@ -37,6 +40,12 @@ export function openUrl(input: string, where: OpenWhere = 'new', opts: { spaceId
   const id = act((d) => ops.newTab(d, { url, now: now(), activate: where !== 'background', spaceId: opts.spaceId }));
   if (where !== 'background') markLoaded(id);
   return id;
+}
+
+/** Replaced by the split view feature. */
+export let openInSplit: (url: string) => ID | null = (url) => openUrl(url, 'new');
+export function setOpenInSplit(fn: (url: string) => ID | null) {
+  openInSplit = fn;
 }
 
 /** Point an existing tab at a new URL. */
@@ -180,6 +189,20 @@ export const actions: Record<string, () => void> = {
   },
   settings: () => setUi({ panel: 'settings' }),
   newFolder: () => void newFolderCmd(),
+  newSpace: () => {
+    const id = act((d) => createSpace(d, {}));
+    setUi({ panel: 'space', panelArg: id });
+  },
+  addFavorite: () => {
+    const t = ops.activeTab(getS());
+    if (t && act((d) => ops.addFavorite(d, t.id))) toast('Added to Favorites');
+  },
+  toggleTheme: () =>
+    act((d) => {
+      const sp = d.spaces.find((x) => x.id === d.activeSpaceId)!;
+      const dark = sp.theme.mode === 'dark' || (sp.theme.mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      sp.theme.mode = dark ? 'light' : 'dark';
+    }),
   archivePage: () => setUi({ panel: 'archive' }),
   clearToday: () => {
     const sp = getS().activeSpaceId;

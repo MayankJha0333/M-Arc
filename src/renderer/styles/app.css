@@ -1612,3 +1612,145 @@ select.input {
 .arch-row:hover .arch-restore-icon {
   opacity: 1;
 }
+
+/* ---- command bar results ---- */
+
+.cb-badge {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: calc(11px * var(--scale));
+  font-weight: 700;
+}
+
+.cb-list {
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.cb-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  padding: 6px 12px;
+  border-radius: 11px;
+  cursor: default;
+}
+
+.cb-row[data-on] {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.cb-row[data-on] .cb-dim,
+.cb-row[data-on] .cb-row-sub,
+.cb-row[data-on] kbd {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.cb-row-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 8px;
+  background: var(--hover);
+}
+
+.cb-row[data-on] .cb-row-icon {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.cb-space-icon {
+  font-size: 15px;
+}
+
+.cb-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cb-row-title,
+.cb-row-sub {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cb-row-title {
+  font-weight: 600;
+  font-size: calc(14px * var(--scale));
+}
+
+.cb-row-title mark,
+.cb-row-sub mark {
+  background: none;
+  color: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+.cb-row-sub {
+  font-size: calc(12px * var(--scale));
+  color: var(--ink-3);
+}
+
+.cb-dim {
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+.cb-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.cb-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--hover);
+  font-size: calc(11px * var(--scale));
+  font-weight: 600;
+}
+
+.cb-row[data-on] .cb-pill {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.cb-enter {
+  opacity: 0.8;
+}
+
+.cb-foot {
+  display: flex;
+  gap: 16px;
+  padding: 9px 20px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-3);
+  font-size: calc(11.5px * var(--scale));
+}
+
+.cb-foot kbd {
+  margin-right: 4px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--hover);
+}

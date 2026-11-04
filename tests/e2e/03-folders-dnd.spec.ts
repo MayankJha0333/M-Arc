@@ -68,7 +68,7 @@ test.describe('folders', () => {
     await page.locator('.folder-row').click({ button: 'right' });
     await page.getByTestId('menu-delete-folder').click();
     await expect(page.locator('.folder')).toHaveCount(0);
-    await expect(page.getByTestId('toast').first()).toContainText('moved to Archive');
+    await expect(page.getByTestId('toast').filter({ hasText: 'moved to Archive' })).toHaveCount(1);
     await page.getByTestId('toast').getByText('Undo').click();
     await expect(page.locator('.folder .folder-children [data-title="a.com"]')).toHaveCount(1);
   });

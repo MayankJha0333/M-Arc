@@ -7,7 +7,7 @@ test.describe('pinned tabs', () => {
     await page.keyboard.press(`${MOD}+d`);
     await expect(pinnedRows(page)).toHaveCount(1);
     await expect(todayRows(page)).toHaveCount(0);
-    await expect(page.getByTestId('toast').first()).toContainText('Pinned');
+    await expect(page.getByTestId('toast').filter({ hasText: 'Pinned' })).toHaveCount(1);
     await page.keyboard.press(`${MOD}+d`);
     await expect(pinnedRows(page)).toHaveCount(0);
     await expect(todayRows(page)).toHaveCount(1);
