@@ -18,8 +18,12 @@ export interface KiteBridge {
   platform: string;
   loadState(): Promise<unknown>;
   saveState(json: string): Promise<void>;
+  /** Blocking save, used while quitting. */
+  saveStateSync(json: string): boolean;
   registerPage(webContentsId: number, tabId: string): void;
   unregisterPage(webContentsId: number): void;
+  /** Run Kite's helper code in a page, in a world the page's own scripts can't see. */
+  execIsolated(webContentsId: number, code: string): Promise<unknown>;
   setShortcuts(shortcuts: Record<string, string>, littleHotkey: string): void;
   onShortcut(cb: (action: string) => void): () => void;
   onOpen(cb: (req: OpenRequest) => void): () => void;

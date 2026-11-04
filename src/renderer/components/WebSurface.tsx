@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { WebviewTag } from 'electron';
 import type { ID } from '@shared/types';
 import { parseLinkMessage } from '@shared/links';
+import { NONCE } from '../nonce';
 import { bridge, isElectron } from '../platform';
 import { registerSurface, type SurfaceHandle } from '../surfaces';
 import { fakePageHtml, fakeTitle } from '../fakePage';
@@ -62,6 +63,7 @@ function ElectronSurface({ id, initialUrl, visible, ...ev }: Props) {
       },
       stopFind: () => wv.stopFindInPage('clearSelection'),
       exec: (js) => wv.executeJavaScript(js),
+      execHidden: (js) => (wcId === null ? Promise.reject(new Error('not ready')) : bridge.execIsolated(wcId, js)),
       insertCSS: (css) => wv.insertCSS(css),
       removeCSS: (key) => wv.removeInsertedCSS(key),
       webContentsId: () => wcId,
@@ -92,7 +94,7 @@ function ElectronSurface({ id, initialUrl, visible, ...ev }: Props) {
       nav();
     };
     const onConsole = (e: Electron.ConsoleMessageEvent) => {
-      const m = parseLinkMessage(e.message);
+      const m = parseLinkMessage(e.message, NONCE);
       if (m) evRef.current.onLink(m.decision as 'peek' | 'little', m.url);
     };
     const onFocus = () => evRef.current.onFocus?.();
@@ -194,6 +196,10 @@ function SimulatedSurface({ id, initialUrl, visible, ...ev }: Props) {
         const win = frame.contentWindow as (Window & { eval(s: string): unknown }) | null;
         return win ? win.eval(js) : undefined;
       },
+      execHidden: async (js) => {
+        const win = frame.contentWindow as (Window & { eval(s: string): unknown }) | null;
+        return win ? win.eval(js) : undefined;
+      },
       insertCSS: async (text) => {
         const doc = frame.contentDocument;
         if (!doc) return null;
@@ -219,7 +225,7 @@ function SimulatedSurface({ id, initialUrl, visible, ...ev }: Props) {
       if (!win || !doc) return;
       const url = current();
       win.console.debug = (msg: unknown) => {
-        const m = typeof msg === 'string' ? parseLinkMessage(msg) : null;
+        const m = typeof msg === 'string' ? parseLinkMessage(msg, NONCE) : null;
         if (m) evRef.current.onLink(m.decision as 'peek' | 'little', m.url);
       };
       // Normal clicks the page didn't handle: navigate or open a tab, like a browser would.

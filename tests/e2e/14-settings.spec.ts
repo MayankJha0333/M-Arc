@@ -141,6 +141,8 @@ test.describe('settings: tabs, search, keyboard, data', () => {
     await expect(todayRows(page)).toHaveCount(0);
     await openSettings(page, 'data');
     await page.getByTestId('backup-import').setInputFiles({ name: 'b.json', mimeType: 'application/json', buffer: Buffer.from(backup.text) });
+    await expect(page.getByTestId('backup-confirm')).toContainText('1 Space, 1 tab, 0 notes and 0 Boosts');
+    await page.getByTestId('backup-restore-confirm').click();
     await page.keyboard.press('Escape');
     await expect(todayRows(page)).toHaveCount(1);
     await expect(todayRows(page).first()).toHaveAttribute('data-title', 'keep.com');

@@ -55,15 +55,26 @@ describe('loadState', () => {
     expect(back.activeBySpace[back.spaces[0].id]).toBeNull();
   });
 
-  it('drops folders from Today and split views with fewer than 2 panes', () => {
+  it('drops folders from Today; a split with one page left becomes that tab (not lost)', () => {
     const s = fresh();
     const raw = JSON.parse(serialize(s));
     raw.items.f = { id: 'f', kind: 'folder', title: 'F', children: [], collapsed: false, createdAt: 0 };
     raw.items.t = { id: 't', kind: 'tab', url: 'https://t.com', title: 't', createdAt: 0, lastActiveAt: 0 };
-    raw.items.sp = { id: 'sp', kind: 'split', panes: ['t'], orientation: 'row', sizes: [1], focused: 0, createdAt: 0, lastActiveAt: 0 };
-    raw.spaces[0].today = ['f', 'sp'];
+    raw.items.sp = { id: 'sp', kind: 'split', panes: ['t', 'gone'], orientation: 'row', sizes: [0.5, 0.5], focused: 0, createdAt: 0, lastActiveAt: 0 };
+    raw.items.empty = { id: 'empty', kind: 'split', panes: [], orientation: 'row', sizes: [], focused: 0, createdAt: 0, lastActiveAt: 0 };
+    raw.spaces[0].today = ['f', 'sp', 'empty'];
     const back = loadState(raw);
-    expect(back.spaces[0].today).toEqual([]);
+    expect(back.spaces[0].today).toEqual(['t']);
+    expect(back.items.t).toBeDefined();
+    expect(back.items.sp).toBeUndefined();
+  });
+
+  it('never crashes on broken Space entries', () => {
+    const raw = JSON.parse(serialize(fresh()));
+    raw.spaces.push(null, 42, { name: 'no id' });
+    expect(() => loadState(raw)).not.toThrow();
+    expect(loadState(raw).spaces).toHaveLength(1);
+    expect(loadState({ spaces: [null] }).spaces).toHaveLength(1);
   });
 });
 
@@ -79,6 +90,27 @@ describe('Storage (disk)', () => {
     writeFileSync(st.file, '{broken');
     expect(st.load()).toEqual({ v: 1 });
     expect(existsSync(`${st.file}.tmp`)).toBe(false);
+  });
+
+  it('keeps one dated snapshot per day for a week', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kite-'));
+    const st = new Storage(dir);
+    expect(st.snapshot()).toBeNull(); // nothing saved yet
+    st.save('{"v":1}');
+    for (let d = 1; d <= 10; d++) st.snapshot(new Date(Date.UTC(2026, 10, d)));
+    const { readdirSync } = await import('node:fs');
+    const files = readdirSync(st.snapshots).sort();
+    expect(files).toHaveLength(7);
+    expect(files[0]).toBe('kite-data-2026-11-04.json');
+    expect(files[6]).toBe('kite-data-2026-11-10.json');
+  });
+
+  it('keeps an untouched copy of a file written by a newer Kite', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kite-'));
+    const st = new Storage(dir);
+    st.save('{"version":99,"x":1}');
+    st.load();
+    expect(existsSync(join(dir, 'kite-data.from-newer-version-99.json'))).toBe(true);
   });
 
   it('refuses to write invalid JSON', () => {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Palette, Layers, Keyboard, Route, Database, Info, RotateCcw, Upload, Download, Wand2, AlertTriangle, PanelLeft, PanelRight } from 'lucide-react';
 import { ARCHIVE_CHOICES, SEARCH_ENGINES, SHORTCUT_LABELS, DEFAULT_SHORTCUTS, createInitialState } from '@shared/defaults';
-import { clearHistory, exportBackup, readBackup, resetAppearance, resetShortcuts, setShortcut, shortcutConflict, updateSettings, LIMITS } from '@shared/settings';
+import { clearHistory, exportBackup, readBackup, resetAppearance, resetShortcuts, setShortcut, shortcutConflict, updateSettings, LIMITS, type BackupInfo } from '@shared/settings';
 import { formatShortcut, shortcutFromEvent } from '@shared/shortcuts';
 import type { Settings as S } from '@shared/types';
 import { activeSpace } from '@shared/tree';
@@ -244,6 +244,7 @@ function Links() {
 function Data() {
   const [confirm, setConfirm] = useState(false);
   const [err, setErr] = useState('');
+  const [pending, setPending] = useState<BackupInfo | null>(null);
   return (
     <>
       <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
@@ -269,12 +270,10 @@ function Data() {
               e.target.value = '';
               if (!f) return;
               try {
-                const state = readBackup(await f.text());
+                setPending(readBackup(await f.text()));
                 setErr('');
-                const before = getS();
-                act((d) => Object.assign(d, state));
-                toast('Backup restored', 'Undo', () => act((d) => Object.assign(d, before)));
               } catch (x) {
+                setPending(null);
                 setErr((x as Error).message);
               }
             }}
@@ -282,6 +281,31 @@ function Data() {
         </label>
       </div>
       {err && <div className="import-error" data-testid="backup-error"><AlertTriangle size={14} /> {err}</div>}
+      {pending && (
+        <div className="danger-zone" data-testid="backup-confirm">
+          <b>Replace everything in Kite with this backup?</b>
+          <span className="muted">
+            It has {pending.spaces} Space{pending.spaces === 1 ? '' : 's'}, {pending.tabs} tab{pending.tabs === 1 ? '' : 's'}, {pending.notes} note{pending.notes === 1 ? '' : 's'} and {pending.boosts} Boost{pending.boosts === 1 ? '' : 's'}.
+            {pending.scriptsRemoved > 0 && ` ${pending.scriptsRemoved} Boost script${pending.scriptsRemoved === 1 ? ' was' : 's were'} left out for safety.`} A daily copy of your current data stays in Kite’s backups folder.
+          </span>
+          <span className="inline-form">
+            <button className="btn small" onClick={() => setPending(null)}>Cancel</button>
+            <button
+              className="btn small danger-solid"
+              data-testid="backup-restore-confirm"
+              onClick={() => {
+                const before = getS();
+                act((d) => Object.assign(d, pending.state));
+                setPending(null);
+                setUi({ loaded: [] });
+                toast('Backup restored', 'Undo', () => act((d) => Object.assign(d, before)), 10_000);
+              }}
+            >
+              Replace with backup
+            </button>
+          </span>
+        </div>
+      )}
       <div className="danger-zone">
         <b>Start over</b>
         <span className="muted">Removes all Spaces, tabs, notes, Boosts and settings from Kite.</span>

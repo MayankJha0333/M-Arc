@@ -10,6 +10,7 @@ import { getS, useKite } from './store';
 import { isMac } from './platform';
 import { surface, type SurfaceHandle } from './surfaces';
 import { applyBoosts } from './boostRuntime';
+import { NONCE } from './nonce';
 
 /** Host a pinned/favorite tab "belongs" to, or null for normal tabs. */
 export function pinnedHostFor(tabId: ID, s: AppState = getS()): string | null {
@@ -35,7 +36,7 @@ export function policyFor(tabId: ID, isPeek: boolean, s: AppState = getS()): Lin
 }
 
 export function setupPage(tabId: ID, handle: SurfaceHandle, url: string, isPeek: boolean) {
-  handle.exec(linkCatcherScript(policyFor(tabId, isPeek))).catch(() => undefined);
+  handle.execHidden(linkCatcherScript(policyFor(tabId, isPeek), NONCE)).catch(() => undefined);
   void applyBoosts(tabId, handle, url);
 }
 
@@ -48,6 +49,6 @@ export function usePolicySync(tabId: ID, isPeek: boolean) {
       first.current = false;
       return;
     }
-    surface(tabId)?.exec(linkCatcherScript(JSON.parse(key))).catch(() => undefined);
+    surface(tabId)?.execHidden(linkCatcherScript(JSON.parse(key), NONCE)).catch(() => undefined);
   }, [key, tabId]);
 }

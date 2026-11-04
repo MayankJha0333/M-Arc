@@ -58,7 +58,7 @@ describe('injected link catcher', () => {
     const dom = new JSDOM(`<a id="ext" href="https://news.site/a">x</a><a id="in" href="/b">y</a>`, { url: 'https://mail.example.com/', runScripts: 'outside-only' });
     const msgs: string[] = [];
     dom.window.console.debug = (m: string) => msgs.push(m);
-    dom.window.eval(linkCatcherScript(policy));
+    dom.window.eval(linkCatcherScript(policy, 'n1'));
     return { dom, msgs };
   }
 
@@ -67,7 +67,7 @@ describe('injected link catcher', () => {
     const ev = new dom.window.MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
     dom.window.document.getElementById('ext')!.dispatchEvent(ev);
     expect(ev.defaultPrevented).toBe(true);
-    expect(parseLinkMessage(msgs[0])).toEqual({ decision: 'peek', url: 'https://news.site/a' });
+    expect(parseLinkMessage(msgs[0], 'n1')).toEqual({ decision: 'peek', url: 'https://news.site/a' });
   });
 
   it('leaves same-site links alone', () => {
@@ -80,15 +80,28 @@ describe('injected link catcher', () => {
 
   it('can be re-run to update the policy without adding a second listener', () => {
     const { dom, msgs } = page({ ...base, pinnedHost: 'mail.example.com' });
-    dom.window.eval(linkCatcherScript({ ...base, pinnedHost: null }));
+    dom.window.eval(linkCatcherScript({ ...base, pinnedHost: null }, 'n1'));
     const ev = new dom.window.MouseEvent('click', { bubbles: true, cancelable: true, button: 0, shiftKey: true });
     dom.window.document.getElementById('ext')!.dispatchEvent(ev);
     expect(msgs).toHaveLength(1);
   });
 
   it('message parsing rejects junk', () => {
-    expect(parseLinkMessage('hello')).toBeNull();
-    expect(parseLinkMessage(`${LINK_MARKER}{bad`)).toBeNull();
-    expect(parseLinkMessage(`${LINK_MARKER}{"decision":"evil","url":"x"}`)).toBeNull();
+    expect(parseLinkMessage('hello', 'n1')).toBeNull();
+    expect(parseLinkMessage(`${LINK_MARKER}n1{bad`, 'n1')).toBeNull();
+    expect(parseLinkMessage(`${LINK_MARKER}n1{"decision":"evil","url":"https://x.com"}`, 'n1')).toBeNull();
+  });
+
+  it('a page cannot fake Kite’s messages without the secret token', () => {
+    const fake = `${LINK_MARKER}{"decision":"little","url":"https://x.com"}`;
+    expect(parseLinkMessage(fake, 'n1')).toBeNull();
+    expect(parseLinkMessage(`${LINK_MARKER}guess{"decision":"little","url":"https://x.com"}`, 'n1')).toBeNull();
+    expect(parseLinkMessage(fake, '')).toBeNull();
+  });
+
+  it('only web links are accepted, never file:, data: or javascript:', () => {
+    for (const url of ['file:///etc/passwd', 'data:text/html,hi', 'javascript:alert(1)', 'kite://settings']) {
+      expect(parseLinkMessage(`${LINK_MARKER}n1${JSON.stringify({ decision: 'little', url })}`, 'n1')).toBeNull();
+    }
   });
 });

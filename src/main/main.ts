@@ -9,7 +9,11 @@ import {
   ipcMain,
   Menu,
   nativeTheme,
+  session,
   shell,
+  webContents as allWebContents,
+  type IpcMainEvent,
+  type IpcMainInvokeEvent,
   type WebContents,
 } from 'electron';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -17,12 +21,16 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { Storage } from './storage';
 import { findAction, toAccelerator } from '../shared/shortcuts';
+import { hostOf } from '../shared/url';
 import type { OpenRequest } from '../shared/ipc';
 
 const isMac = process.platform === 'darwin';
 const devUrl = process.env.KITE_DEV_URL;
 const userDataOverride = process.env.KITE_USER_DATA;
 if (userDataOverride) app.setPath('userData', userDataOverride);
+
+const PARTITION = 'persist:kite';
+const isWebUrl = (u: string) => /^https?:\/\//i.test(u);
 
 let storage: Storage;
 let mainWindow: BrowserWindow | null = null;
@@ -38,15 +46,28 @@ function rendererUrl(query = ''): string {
   return `file://${join(__dirname, '../renderer/index.html')}${query}`;
 }
 
+/** Only Kite's own UI may use Kite's private messages — never a web page. */
+function fromKite(e: IpcMainEvent | IpcMainInvokeEvent): boolean {
+  const url = e.senderFrame?.url ?? '';
+  if (devUrl) return url.startsWith(devUrl);
+  return url.startsWith(`file://${join(__dirname, '../renderer/index.html')}`);
+}
+
 function baseWebPreferences(): Electron.WebPreferences {
   return {
     preload: join(__dirname, 'preload.cjs'),
     contextIsolation: true,
     nodeIntegration: false,
-    sandbox: false,
+    sandbox: true,
     webviewTag: true,
     spellcheck: true,
   };
+}
+
+/** Kite's own windows must never be navigated away from Kite (e.g. by dropping a link on them). */
+function lockKiteWindow(win: BrowserWindow) {
+  win.webContents.on('will-navigate', (e) => e.preventDefault());
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 }
 
 function createMainWindow(): BrowserWindow {
@@ -63,6 +84,7 @@ function createMainWindow(): BrowserWindow {
     autoHideMenuBar: !isMac,
     webPreferences: baseWebPreferences(),
   });
+  lockKiteWindow(win);
   win.once('ready-to-show', () => win.show());
   win.loadURL(rendererUrl());
   win.on('closed', () => {
@@ -74,7 +96,14 @@ function createMainWindow(): BrowserWindow {
   return win;
 }
 
-function createLittleWindow(url: string): BrowserWindow {
+// A page could try to open endless windows; allow a few per few seconds.
+let littleTimes: number[] = [];
+function createLittleWindow(url: string): BrowserWindow | null {
+  const now = Date.now();
+  littleTimes = littleTimes.filter((t) => now - t < 5000);
+  if (littleTimes.length >= 4) return null;
+  littleTimes.push(now);
+  if (url !== 'kite://new' && !isWebUrl(url)) return null;
   const win = new BrowserWindow({
     width: 560,
     height: 700,
@@ -88,6 +117,7 @@ function createLittleWindow(url: string): BrowserWindow {
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#16171c' : '#f3efe9',
     webPreferences: baseWebPreferences(),
   });
+  lockKiteWindow(win);
   littleWindows.add(win);
   win.once('ready-to-show', () => win.show());
   win.loadURL(rendererUrl(`?mode=little&url=${encodeURIComponent(url)}`));
@@ -100,20 +130,65 @@ function ensureMainWindow(): BrowserWindow {
   return mainWindow;
 }
 
+/** Deliver a message to the main window, waiting for it to load if needed. */
+function sendToMain(channel: string, payload: unknown) {
+  const win = ensureMainWindow();
+  if (win.webContents.isLoading()) win.webContents.once('did-finish-load', () => win.webContents.send(channel, payload));
+  else win.webContents.send(channel, payload);
+}
+
 function sendOpen(host: WebContents, req: OpenRequest) {
-  if (!host.isDestroyed()) host.send('open-request', req);
+  // Pages may only ask Kite to open web links (never file:, data:, kite: …).
+  if (!isWebUrl(req.url) || host.isDestroyed()) return;
+  host.send('open-request', req);
+}
+
+/** Links to other apps (mailto:, zoommtg: …): safe ones open, anything else asks first. */
+const SAFE_SCHEMES = /^(mailto|tel|sms|facetime|facetime-audio|webcal|maps|zoommtg|zoomus|msteams|slack|spotify|tg|whatsapp):/i;
+async function openOutside(url: string, from: WebContents) {
+  if (SAFE_SCHEMES.test(url)) return void shell.openExternal(url).catch(() => undefined);
+  const scheme = url.split(':')[0];
+  const win = BrowserWindow.fromWebContents(from) ?? mainWindow ?? undefined;
+  const opts = {
+    type: 'question' as const,
+    buttons: ['Cancel', 'Open'],
+    defaultId: 0,
+    cancelId: 0,
+    message: `Open “${scheme}:” link in another app?`,
+    detail: `A page wants to open:\n${url.slice(0, 300)}\n\nOnly continue if you trust it.`,
+  };
+  const res = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
+  if (res.response === 1) shell.openExternal(url).catch(() => undefined);
+}
+
+let popupTimes: number[] = [];
+
+/** Rules shared by web pages and the popups they open. */
+function guardNavigation(contents: WebContents) {
+  contents.on('will-navigate', (e, url) => {
+    if (/^(https?|about|blob):/i.test(url)) return;
+    if (/^file:/i.test(url) && /^file:/i.test(contents.getURL())) return; // a local file linking to another
+    e.preventDefault();
+    if (!/^(file|data|javascript|kite|chrome|devtools):/i.test(url)) void openOutside(url, contents);
+  });
 }
 
 /** Lock down every web page shown inside a <webview>. */
 function hardenWebview(contents: WebContents) {
+  guardNavigation(contents);
   contents.setWindowOpenHandler((details) => {
     const page = pages.get(contents.id);
     const host = page?.host ?? mainWindow?.webContents;
-    // Real popups (OAuth sign-in windows etc.) need to stay popups.
+    if (!isWebUrl(details.url) && details.url !== 'about:blank') return { action: 'deny' };
+    // Real popups (sign-in windows etc.) need to stay popups — a few at a time.
     if (details.disposition === 'new-window' && details.features) {
+      const now = Date.now();
+      popupTimes = popupTimes.filter((t) => now - t < 5000);
+      if (popupTimes.length >= 3) return { action: 'deny' };
+      popupTimes.push(now);
       return {
         action: 'allow',
-        overrideBrowserWindowOptions: { width: 520, height: 680, autoHideMenuBar: true, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } },
+        overrideBrowserWindowOptions: { width: 520, height: 680, autoHideMenuBar: true, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, partition: PARTITION } },
       };
     }
     if (host) {
@@ -121,6 +196,15 @@ function hardenWebview(contents: WebContents) {
       sendOpen(host, { url: details.url, disposition, sourceTabId: page?.tabId ?? null });
     }
     return { action: 'deny' };
+  });
+  // Popups get the same rules, and can't open more popups themselves.
+  contents.on('did-create-window', (popup) => {
+    guardNavigation(popup.webContents);
+    popup.webContents.setWindowOpenHandler((d) => {
+      const host = pages.get(contents.id)?.host ?? mainWindow?.webContents;
+      if (host) sendOpen(host, { url: d.url, disposition: 'new-tab', sourceTabId: null });
+      return { action: 'deny' };
+    });
   });
 
   contents.on('before-input-event', (event, input) => {
@@ -151,7 +235,7 @@ function hardenWebview(contents: WebContents) {
     const host = page?.host;
     if (!host) return;
     const items: Electron.MenuItemConstructorOptions[] = [];
-    if (params.linkURL) {
+    if (params.linkURL && isWebUrl(params.linkURL)) {
       const url = params.linkURL;
       items.push(
         { label: 'Open Link in New Tab', click: () => sendOpen(host, { url, disposition: 'new-tab', sourceTabId: page.tabId }) },
@@ -166,7 +250,7 @@ function hardenWebview(contents: WebContents) {
     }
     if (params.selectionText) items.push({ role: 'copy' });
     if (params.isEditable) items.push({ role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' });
-    if (params.mediaType === 'image' && params.srcURL) {
+    if (params.mediaType === 'image' && isWebUrl(params.srcURL)) {
       items.push({ label: 'Open Image in New Tab', click: () => sendOpen(host, { url: params.srcURL, disposition: 'new-tab', sourceTabId: page.tabId }) });
       items.push({ label: 'Copy Image Address', click: () => clipboard.writeText(params.srcURL) });
     }
@@ -180,13 +264,49 @@ function hardenWebview(contents: WebContents) {
     );
     Menu.buildFromTemplate(items).popup();
   });
+}
 
-  // Never let a page navigate itself to something dangerous.
-  contents.on('will-navigate', (e, url) => {
-    if (!/^(https?|about|data|blob|file):/i.test(url)) {
-      e.preventDefault();
-      shell.openExternal(url).catch(() => undefined);
-    }
+/**
+ * Websites must ask before using the camera, microphone, location, notifications…
+ * Answers are remembered until Kite quits.
+ */
+const decisions = new Map<string, boolean>();
+const ALWAYS_OK = new Set(['fullscreen', 'clipboard-sanitized-write', 'pointerLock', 'window-management']);
+const LABELS: Record<string, string> = {
+  media: 'use your camera or microphone',
+  geolocation: 'know your location',
+  notifications: 'show notifications',
+  'clipboard-read': 'read your clipboard',
+  midi: 'use MIDI devices',
+  midiSysex: 'use MIDI devices',
+  'display-capture': 'record your screen',
+  idleDetection: 'know when you’re idle',
+  hid: 'use connected devices',
+  serial: 'use serial devices',
+  usb: 'use USB devices',
+  'storage-access': 'use its saved data on other sites',
+  'top-level-storage-access': 'use its saved data on other sites',
+};
+function setupPermissions() {
+  const ses = session.fromPartition(PARTITION);
+  ses.setPermissionRequestHandler(async (wc, permission, callback, details) => {
+    if (ALWAYS_OK.has(permission)) return callback(true);
+    if (permission === 'openExternal') return callback(false); // handled by openOutside()
+    const label = LABELS[permission];
+    const site = hostOf(details.requestingUrl || wc.getURL()) || 'This page';
+    if (!label) return callback(false);
+    const key = `${site}|${permission}`;
+    if (decisions.has(key)) return callback(decisions.get(key)!);
+    const win = BrowserWindow.fromWebContents(pages.get(wc.id)?.host ?? wc) ?? mainWindow ?? undefined;
+    const opts = { type: 'question' as const, buttons: ['Don’t Allow', 'Allow'], defaultId: 0, cancelId: 0, message: `Allow ${site} to ${label}?`, detail: 'You’ll be asked again after Kite restarts.' };
+    const res = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
+    const ok = res.response === 1;
+    decisions.set(key, ok);
+    callback(ok);
+  });
+  ses.setPermissionCheckHandler((wc, permission, origin) => {
+    if (ALWAYS_OK.has(permission)) return true;
+    return decisions.get(`${hostOf(origin) || hostOf(wc?.getURL() ?? '')}|${permission}`) ?? false;
   });
 }
 
@@ -202,7 +322,7 @@ function registerGlobalHotkey() {
 }
 
 function handleExternalUrl(url: string) {
-  if (!/^https?:/i.test(url)) return;
+  if (!isWebUrl(url)) return;
   const win = mainWindow;
   if (win && !win.isDestroyed() && !win.webContents.isLoading()) win.webContents.send('external-url', url);
   else {
@@ -216,31 +336,55 @@ function arcDefaultPath(): string {
 }
 
 function setupIpc() {
-  ipcMain.handle('state:load', () => storage.load());
-  ipcMain.handle('state:save', (_e, json: string) => storage.save(json));
-  ipcMain.on('page:register', (e, id: number, tabId: string) => pages.set(id, { tabId, host: e.sender }));
-  ipcMain.on('page:unregister', (_e, id: number) => pages.delete(id));
-  ipcMain.on('shortcuts:set', (_e, map: Record<string, string>, hotkey: string) => {
+  // Every handler checks the sender is Kite's own UI.
+  const on = (ch: string, fn: (e: IpcMainEvent, ...a: never[]) => void) => ipcMain.on(ch, (e, ...a) => fromKite(e) && fn(e, ...(a as never[])));
+  const handle = (ch: string, fn: (e: IpcMainInvokeEvent, ...a: never[]) => unknown) =>
+    ipcMain.handle(ch, (e, ...a) => {
+      if (!fromKite(e)) throw new Error('Not allowed');
+      return fn(e, ...(a as never[]));
+    });
+
+  handle('state:load', () => storage.load());
+  handle('state:save', (_e, json: string) => storage.save(json));
+  // Used on quit, when there's no time to wait for an async reply.
+  ipcMain.on('state:save-sync', (e, json: string) => {
+    if (!fromKite(e)) return void (e.returnValue = false);
+    try {
+      storage.save(json);
+      e.returnValue = true;
+    } catch {
+      e.returnValue = false;
+    }
+  });
+  on('page:register', (e, id: number, tabId: string) => pages.set(id, { tabId, host: e.sender }));
+  on('page:unregister', (_e, id: number) => pages.delete(id));
+  // Run Kite's helper scripts in a separate "world" the page itself can't see or tamper with.
+  handle('page:exec-isolated', async (e, id: number, code: string) => {
+    const page = pages.get(id);
+    if (!page || page.host !== e.sender) throw new Error('Unknown page');
+    const wc = allWebContents.fromId(id);
+    return wc ? wc.executeJavaScriptInIsolatedWorld(1999, [{ code }]) : null;
+  });
+  on('shortcuts:set', (_e, map: Record<string, string>, hotkey: string) => {
     shortcuts = map;
     if (hotkey !== littleHotkey) {
       littleHotkey = hotkey;
       registerGlobalHotkey();
     }
   });
-  ipcMain.on('little:open', (_e, url: string) => createLittleWindow(url));
-  ipcMain.on('little:to-main', (e, url: string, spaceId: string | null) => {
+  on('little:open', (_e, url: string) => void createLittleWindow(url));
+  on('little:to-main', (e, url: string, spaceId: string | null) => {
+    if (!isWebUrl(url)) return;
+    sendToMain('little-to-main', { url, spaceId });
     const win = ensureMainWindow();
-    const send = () => win.webContents.send('little-to-main', { url, spaceId });
-    if (win.webContents.isLoading()) win.webContents.once('did-finish-load', send);
-    else send();
     win.show();
     win.focus();
     BrowserWindow.fromWebContents(e.sender)?.close();
   });
-  ipcMain.on('little:archive', (_e, url: string, title: string) => {
-    mainWindow?.webContents.send('little-archived', { url, title });
+  on('little:archive', (_e, url: string, title: string) => {
+    if (isWebUrl(url)) sendToMain('little-archived', { url, title: String(title).slice(0, 300) });
   });
-  ipcMain.handle('arc:pick', async (e) => {
+  handle('arc:pick', async (e) => {
     const win = BrowserWindow.fromWebContents(e.sender) ?? undefined;
     const res = await dialog.showOpenDialog(win!, {
       title: 'Choose StorableSidebar.json',
@@ -251,21 +395,20 @@ function setupIpc() {
     if (res.canceled || !res.filePaths[0]) return null;
     return { path: res.filePaths[0], text: readFileSync(res.filePaths[0], 'utf8') };
   });
-  ipcMain.handle('arc:read-default', () => {
+  handle('arc:read-default', () => {
     const p = arcDefaultPath();
     if (!existsSync(p)) return null;
     return { path: p, text: readFileSync(p, 'utf8') };
   });
-  ipcMain.handle('browser:set-default', () => {
-    const ok = app.setAsDefaultProtocolClient('http') && app.setAsDefaultProtocolClient('https');
-    return ok;
-  });
-  ipcMain.handle('browser:is-default', () => app.isDefaultProtocolClient('https'));
-  ipcMain.handle('file:export', async (e, name: string, text: string) => {
+  handle('browser:set-default', () => app.setAsDefaultProtocolClient('http') && app.setAsDefaultProtocolClient('https'));
+  handle('browser:is-default', () => app.isDefaultProtocolClient('https'));
+  // The user picks where the file goes in a Save dialog; the name is only a suggestion.
+  handle('file:export', async (e, name: string, text: string) => {
     const win = BrowserWindow.fromWebContents(e.sender) ?? undefined;
-    const res = await dialog.showSaveDialog(win!, { defaultPath: join(app.getPath('downloads'), name) });
+    const safeName = String(name).replace(/[/\\:*?"<>|]+/g, '-').slice(0, 120) || 'kite-export.txt';
+    const res = await dialog.showSaveDialog(win!, { defaultPath: join(app.getPath('downloads'), safeName) });
     if (res.canceled || !res.filePath) return false;
-    writeFileSync(res.filePath, text, 'utf8');
+    writeFileSync(res.filePath, String(text), 'utf8');
     return true;
   });
 }
@@ -281,7 +424,7 @@ function buildAppMenu() {
       label: 'File',
       submenu: [
         { label: 'New Tab…', click: send('commandBar') },
-        { label: 'New Little Window', click: () => createLittleWindow('kite://new') },
+        { label: 'New Little Window', click: () => void createLittleWindow('kite://new') },
         { label: 'New Note', click: send('newNote') },
         { type: 'separator' },
         { label: 'Import from Arc…', click: send('importArc') },
@@ -311,7 +454,7 @@ if (!gotLock) {
   app.quit();
 } else {
   app.on('second-instance', (_e, argv) => {
-    const url = argv.find((a) => /^https?:\/\//i.test(a));
+    const url = argv.find((a) => isWebUrl(a));
     if (url) handleExternalUrl(url);
     else ensureMainWindow().focus();
   });
@@ -320,26 +463,31 @@ if (!gotLock) {
   app.on('open-url', (event, url) => {
     event.preventDefault();
     if (app.isReady()) handleExternalUrl(url);
-    else pendingExternal.push(url);
+    else if (isWebUrl(url)) pendingExternal.push(url);
   });
 
   app.on('web-contents-created', (_e, contents) => {
     if (contents.getType() === 'webview') hardenWebview(contents);
     contents.on('will-attach-webview', (_ev, prefs, params) => {
-      // Web pages never get Node or Kite's preload.
+      // Web pages never get Node or Kite's preload, and always use Kite's own session.
       delete prefs.preload;
       prefs.nodeIntegration = false;
       prefs.contextIsolation = true;
       prefs.sandbox = true;
-      if (!/^(https?|about|data|file):/i.test(params.src || 'about:blank')) params.src = 'about:blank';
+      prefs.webSecurity = true;
+      prefs.allowRunningInsecureContent = false;
+      params.partition = PARTITION;
+      if (!/^(https?|about|file):/i.test(params.src || 'about:blank')) params.src = 'about:blank';
     });
   });
 
   app.whenReady().then(() => {
     storage = new Storage(app.getPath('userData'));
+    storage.snapshot(); // a dated copy per day, kept for a week
+    setupPermissions();
     setupIpc();
     buildAppMenu();
-    const argUrl = process.argv.find((a) => /^https?:\/\//i.test(a));
+    const argUrl = process.argv.find((a) => isWebUrl(a));
     if (argUrl) pendingExternal.push(argUrl);
     mainWindow = createMainWindow();
     app.on('activate', () => ensureMainWindow());

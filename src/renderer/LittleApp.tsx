@@ -16,6 +16,7 @@ import { WebSurface } from './components/WebSurface';
 import { surface } from './surfaces';
 import { linkCatcherScript } from '@shared/links';
 import { KiteLogo } from './components/KiteLogo';
+import { NONCE } from './nonce';
 import { SiteIcon } from './components/SiteIcon';
 import { applyBoostsWith } from './boostRuntime';
 
@@ -168,7 +169,7 @@ export function LittleApp() {
                 onLink={(_d, u) => go(u)}
                 onOpen={(u) => bridge.moveLittleToMain(u, null)}
                 onReady={(handle, u) => {
-                  handle.exec(linkCatcherScript({ pinnedHost: null, peekOnExternal: false, peekOnShift: false, isPeek: true, isMac })).catch(() => undefined);
+                  handle.execHidden(linkCatcherScript({ pinnedHost: null, peekOnExternal: false, peekOnShift: false, isPeek: true, isMac }, NONCE)).catch(() => undefined);
                   void applyBoostsWith(state, handle, u);
                 }}
               />

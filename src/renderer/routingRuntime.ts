@@ -7,6 +7,7 @@ import { routeFor } from '@shared/routing';
 import { getS, toast } from './store';
 
 export function handleOpenRequest(req: OpenRequest) {
+  if (!/^https?:\/\//i.test(req.url)) return; // pages may only open web links
   switch (req.disposition) {
     case 'background-tab':
       openUrl(req.url, 'background');

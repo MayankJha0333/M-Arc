@@ -70,6 +70,11 @@ function makeWebBridge(): KiteBridge {
     async saveState(json) {
       localStorage.setItem(STORAGE_KEY, json);
     },
+    saveStateSync(json) {
+      localStorage.setItem(STORAGE_KEY, json);
+      return true;
+    },
+    execIsolated: async () => null,
     registerPage() {},
     unregisterPage() {},
     setShortcuts() {},

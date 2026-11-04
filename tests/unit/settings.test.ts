@@ -61,10 +61,23 @@ describe('backup', () => {
     let s = fresh();
     [s] = run(s, (d) => newTab(d, { url: 'https://a.com', now: T0 }));
     const back = readBackup(exportBackup(s));
-    expect(back.items).toEqual(s.items);
-    expect(back.spaces).toEqual(s.spaces);
+    expect(back.state.items).toEqual(s.items);
+    expect(back.state.spaces).toEqual(s.spaces);
+    expect(back).toMatchObject({ spaces: 1, tabs: 1, notes: 0, boosts: 0, scriptsRemoved: 0 });
     expect(() => readBackup('{"kind":"other"}')).toThrow(/isn’t a Kite backup/);
     expect(() => readBackup('garbage')).toThrow(/isn’t a Kite backup/);
+    expect(() => readBackup('{"kind":"kite-backup","state":null}')).toThrow(/isn’t a Kite backup/);
+    expect(() => readBackup('{"kind":"kite-backup","state":{"hello":1}}')).toThrow(/damaged or empty/);
+  });
+
+  it('restoring never brings Boost scripts in', () => {
+    let s = fresh();
+    [s] = run(s, (d) => {
+      d.boosts.push({ id: 'b', name: 'x', domain: 'bank.example', enabled: true, css: 'p{}', js: 'steal()', zaps: [], createdAt: 0, updatedAt: 0 });
+    });
+    const back = readBackup(exportBackup(s));
+    expect(back.scriptsRemoved).toBe(1);
+    expect(back.state.boosts[0]).toMatchObject({ css: 'p{}', js: '' });
   });
 
   it('clears history', () => {

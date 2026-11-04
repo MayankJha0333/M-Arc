@@ -57,7 +57,14 @@ export function decideLinkClick(p: LinkPolicy, c: ClickInfo): ClickDecision {
  */
 export const LINK_MARKER = '__kite_link__';
 
-export function linkCatcherScript(policy: LinkPolicy): string {
+/** A random token per app run; messages without it are ignored. */
+export function makeNonce(): string {
+  const a = new Uint8Array(12);
+  crypto.getRandomValues(a);
+  return Array.from(a, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export function linkCatcherScript(policy: LinkPolicy, nonce: string): string {
   return `(() => {
   if (window.__kiteLinkCatcher) { window.__kiteLinkCatcher.policy = ${JSON.stringify(policy)}; return; }
   const decide = ${decideLinkClick.toString()};
@@ -70,16 +77,17 @@ export function linkCatcherScript(policy: LinkPolicy): string {
     if (d === 'default') return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    console.debug(${JSON.stringify(LINK_MARKER)} + JSON.stringify({ decision: d, url: a.href }));
+    console.debug(${JSON.stringify(LINK_MARKER + nonce)} + JSON.stringify({ decision: d, url: a.href }));
   }, true);
 })();`;
 }
 
-export function parseLinkMessage(message: string): { decision: ClickDecision; url: string } | null {
-  if (!message.startsWith(LINK_MARKER)) return null;
+export function parseLinkMessage(message: string, nonce: string): { decision: ClickDecision; url: string } | null {
+  const head = LINK_MARKER + nonce;
+  if (!nonce || !message.startsWith(head)) return null;
   try {
-    const v = JSON.parse(message.slice(LINK_MARKER.length));
-    if (typeof v.url === 'string' && (v.decision === 'peek' || v.decision === 'little')) return v;
+    const v = JSON.parse(message.slice(head.length));
+    if (typeof v.url === 'string' && /^https?:\/\//i.test(v.url) && (v.decision === 'peek' || v.decision === 'little')) return v;
   } catch {
     /* ignore */
   }

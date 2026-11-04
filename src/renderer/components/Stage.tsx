@@ -76,7 +76,7 @@ function SurfaceSlot({ id, rect, focusedInSplit, inSplit }: { id: ID; rect?: Rec
         onLoading={(l) => setUi((u) => ({ loading: { ...u.loading, [id]: l } }))}
         onNav={(back, forward) => setUi((u) => ({ nav: { ...u.nav, [id]: { back, forward } } }))}
         onLink={(decision, url) => openUrl(url, decision, { sourceTabId: id })}
-        onOpen={(url, background) => openUrl(url, background ? 'background' : 'new')}
+        onOpen={(url, background) => /^https?:\/\//i.test(url) && openUrl(url, background ? 'background' : 'new')}
         onReady={(handle, url) => setupPage(id, handle, url, false)}
         onFocus={() => {
           const sp = ops.activeItemId(useKite.getState().s);

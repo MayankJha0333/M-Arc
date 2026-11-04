@@ -74,8 +74,22 @@ export function exportBackup(s: AppState): string {
   return JSON.stringify({ kind: 'kite-backup', exportedAt: new Date().toISOString(), state: JSON.parse(serialize(s)) }, null, 1);
 }
 
-/** Read a backup file. Throws with a readable message if it isn't one. */
-export function readBackup(text: string): AppState {
+export interface BackupInfo {
+  state: AppState;
+  spaces: number;
+  tabs: number;
+  notes: number;
+  boosts: number;
+  /** Boost scripts found in the file and left out for safety. */
+  scriptsRemoved: number;
+}
+
+/**
+ * Read a backup file. Throws with a readable message if it isn't one or is empty.
+ * Boost scripts are removed: a backup from someone else could carry scripts
+ * that run on sites like your bank.
+ */
+export function readBackup(text: string): BackupInfo {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -83,6 +97,22 @@ export function readBackup(text: string): AppState {
     throw new Error('That file isn’t a Kite backup.');
   }
   const r = raw as { kind?: string; state?: unknown };
-  if (r?.kind !== 'kite-backup' || typeof r.state !== 'object') throw new Error('That file isn’t a Kite backup.');
-  return loadState(r.state);
+  if (r?.kind !== 'kite-backup' || typeof r.state !== 'object' || r.state === null || Array.isArray(r.state)) throw new Error('That file isn’t a Kite backup.');
+  const rawState = r.state as { items?: unknown; spaces?: unknown };
+  if (typeof rawState.items !== 'object' || !Array.isArray(rawState.spaces)) throw new Error('That backup is damaged or empty.');
+  const state = loadState(r.state);
+  let scriptsRemoved = 0;
+  for (const b of state.boosts) {
+    if (b.js?.trim()) scriptsRemoved++;
+    b.js = '';
+  }
+  const items = Object.values(state.items);
+  return {
+    state,
+    spaces: state.spaces.length,
+    tabs: items.filter((x) => x.kind === 'tab').length,
+    notes: items.filter((x) => x.kind === 'note').length,
+    boosts: state.boosts.length,
+    scriptsRemoved,
+  };
 }

@@ -36,7 +36,7 @@ export async function zapElement(boostId: ID) {
   setUi({ panel: null, zapping: true });
   h.focus();
   try {
-    const sel = (await h.exec(zapPickerScript())) as string | null;
+    const sel = (await h.execHidden(zapPickerScript())) as string | null;
     if (sel && act((d) => addZap(d, boostId, sel, now()))) toast('Hidden. Zap more or edit the Boost to undo.');
   } finally {
     setUi({ zapping: false, panel: 'boost', panelArg: boostId });

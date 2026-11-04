@@ -118,13 +118,30 @@ export function unload(id: ID) {
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let lastSaved: AppState | null = null;
 
-export function flushSave() {
+let failures = 0;
+
+export function flushSave(sync = false) {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = null;
   const s = getS();
   if (s === lastSaved) return;
-  lastSaved = s;
-  void bridge.saveState(serialize(s));
+  const json = serialize(s);
+  if (sync) {
+    if (bridge.saveStateSync(json)) lastSaved = s;
+    return;
+  }
+  bridge
+    .saveState(json)
+    .then(() => {
+      if (getS() === s) lastSaved = s;
+      failures = 0;
+    })
+    .catch(() => {
+      // Keep the change marked unsaved and try again shortly.
+      failures++;
+      if (failures === 3) toast('Kite couldn’t save your changes. It will keep trying.');
+      saveTimer = setTimeout(() => flushSave(), Math.min(30_000, 1000 * failures));
+    });
 }
 
 export function startAutosave() {
@@ -134,5 +151,5 @@ export function startAutosave() {
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(flushSave, 350);
   });
-  window.addEventListener('beforeunload', flushSave);
+  window.addEventListener('beforeunload', () => flushSave(true));
 }

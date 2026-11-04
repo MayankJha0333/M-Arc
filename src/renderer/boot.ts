@@ -67,6 +67,18 @@ export async function boot() {
     if (st.s.settings !== prev.s.settings) syncShortcuts();
   });
 
+  // Dropping a link on Kite opens it as a tab (and never navigates Kite's own window).
+  window.addEventListener('dragover', (e) => {
+    if (e.dataTransfer?.types.some((t) => t === 'text/uri-list' || t === 'Files')) e.preventDefault();
+  });
+  window.addEventListener('drop', (e) => {
+    const text = e.dataTransfer?.getData('text/uri-list') || e.dataTransfer?.getData('text/plain') || '';
+    if (!e.dataTransfer?.types.some((t) => t === 'text/uri-list' || t === 'Files')) return;
+    e.preventDefault();
+    const url = text.split('\n').map((x) => x.trim()).find((x) => /^https?:\/\//i.test(x));
+    if (url) openUrl(url, 'new');
+  });
+
   window.addEventListener(
     'keydown',
     (e) => {

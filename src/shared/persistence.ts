@@ -15,7 +15,9 @@ export function loadState(raw: unknown): AppState {
   const state: AppState = {
     version: STATE_VERSION,
     items: isObj(s.items) ? (s.items as Record<ID, Item>) : {},
-    spaces: Array.isArray(s.spaces) && s.spaces.length > 0 ? s.spaces : base.spaces,
+    spaces: Array.isArray(s.spaces) && s.spaces.some((x) => isObj(x) && typeof (x as { id?: unknown }).id === 'string')
+      ? s.spaces.filter((x) => isObj(x) && typeof (x as { id?: unknown }).id === 'string')
+      : base.spaces,
     favorites: Array.isArray(s.favorites) ? s.favorites : [],
     activeSpaceId: typeof s.activeSpaceId === 'string' ? s.activeSpaceId : base.activeSpaceId,
     activeBySpace: isObj(s.activeBySpace) ? (s.activeBySpace as AppState['activeBySpace']) : {},
@@ -45,22 +47,31 @@ export function loadState(raw: unknown): AppState {
  */
 export function repair(s: AppState): void {
   const seen = new Set<ID>();
-  const clean = (ids: ID[], allowFolder: boolean): ID[] =>
-    ids.filter((id) => {
+  const clean = (ids: ID[], allowFolder: boolean): ID[] => {
+    const out: ID[] = [];
+    for (const id of Array.isArray(ids) ? ids : []) {
       const it = s.items[id];
-      if (!it || seen.has(id)) return false;
-      if (it.kind === 'folder' && !allowFolder) return false;
+      if (!it || typeof it !== 'object' || seen.has(id)) continue;
+      if (it.kind === 'folder' && !allowFolder) continue;
       seen.add(id);
-      if (it.kind === 'folder') it.children = clean(Array.isArray(it.children) ? it.children : [], true);
+      if (it.kind === 'folder') it.children = clean(it.children, true);
       if (it.kind === 'split') {
-        it.panes = (it.panes ?? []).filter((p) => s.items[p]?.kind === 'tab' && !seen.has(p));
+        it.panes = (Array.isArray(it.panes) ? it.panes : []).filter((p) => s.items[p]?.kind === 'tab' && !seen.has(p));
         it.panes.forEach((p) => seen.add(p));
         if (it.sizes?.length !== it.panes.length) it.sizes = it.panes.map(() => 1 / Math.max(1, it.panes.length));
         it.focused = Math.min(Math.max(0, it.focused ?? 0), Math.max(0, it.panes.length - 1));
-        if (it.panes.length < 2) return false;
+        // A split with one page left becomes that page again (never lose a tab).
+        if (it.panes.length === 1) {
+          out.push(it.panes[0]);
+          seen.delete(id);
+          continue;
+        }
+        if (it.panes.length === 0) continue;
       }
-      return true;
-    });
+      out.push(id);
+    }
+    return out;
+  };
 
   s.favorites = clean(s.favorites, false).filter((id) => s.items[id].kind === 'tab');
   for (const sp of s.spaces) {
