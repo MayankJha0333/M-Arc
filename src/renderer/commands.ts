@@ -259,6 +259,7 @@ export const actions: Record<string, () => void> = {
   newNote: () => void act((d) => createNote(d, { now: now() })),
   boostsPanel: () => setUi({ panel: 'boosts' }),
   routingPanel: () => setUi({ panel: 'routing' }),
+  importArc: () => setUi({ panel: 'import' }),
   nextSpace: () => {
     act((d) => stepSpace(d, 1));
     afterSpaceChange();

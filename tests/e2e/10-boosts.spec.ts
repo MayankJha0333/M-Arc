@@ -53,7 +53,7 @@ test.describe('boosts', () => {
     await newTab(page, 'example.com');
     await page.keyboard.press(`${MOD}+Alt+b`);
     await page.getByTestId('boost-css').fill('body { background: rgb(9, 9, 9) !important; }');
-    await page.getByTestId('boost-done').click();
+    await page.getByTestId('boost-done').click(); // straight away: nothing typed may be lost
     await newTab(page, 'blog.example.com/post');
     await expect(visibleFrame(page).locator('body')).toHaveCSS('background-color', 'rgb(9, 9, 9)');
     await newTab(page, 'unrelated.com');

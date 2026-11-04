@@ -145,3 +145,24 @@ test('routing: a link handed to Kite at launch opens in a little window (default
   await expect(little.getByTestId('little-url')).toContainText('Page Two', { timeout: 15000 });
   await app.close();
 });
+
+test('Arc import: finds StorableSidebar.json at Arc’s real location and imports it', async () => {
+  const { mkdtempSync, mkdirSync, copyFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const home = mkdtempSync(join(tmpdir(), 'kite-home-'));
+  const arcDir = join(home, 'Library', 'Application Support', 'Arc');
+  mkdirSync(arcDir, { recursive: true });
+  copyFileSync(join(process.cwd(), 'tests/fixtures/arc-sidebar.json'), join(arcDir, 'StorableSidebar.json'));
+  const { app, win } = await launch(undefined, [], { HOME: home });
+  await win.keyboard.press(`${MOD}+t`);
+  await win.getByTestId('cb-input').fill('import from arc');
+  await win.keyboard.press('Enter');
+  await win.getByTestId('import-auto').click();
+  await expect(win.getByTestId('import-space')).toHaveCount(2);
+  await expect(win.getByTestId('import-preview')).toContainText('Library/Application Support/Arc/StorableSidebar.json');
+  await win.getByTestId('import-run').click();
+  await expect(win.getByTestId('space-name')).toHaveText('Work');
+  await expect(win.locator('[data-testid^="fav-"]')).toHaveCount(2);
+  await app.close();
+});

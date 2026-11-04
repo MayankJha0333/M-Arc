@@ -1,0 +1,96 @@
+{
+ "sidebarSyncState": {
+  "items": [
+   "p1",
+   {
+    "value": {
+     "id": "p1",
+     "parentID": null,
+     "childrenIds": [
+      "x1"
+     ],
+     "data": {
+      "itemContainer": {}
+     }
+    }
+   },
+   "u1",
+   {
+    "value": {
+     "id": "u1",
+     "parentID": null,
+     "childrenIds": [
+      "x2"
+     ],
+     "data": {
+      "itemContainer": {}
+     }
+    }
+   },
+   "x1",
+   {
+    "value": {
+     "id": "x1",
+     "parentID": "p1",
+     "childrenIds": [],
+     "createdAt": 750000000.0,
+     "isUnread": false,
+     "data": {
+      "tab": {
+       "savedURL": "https://kagi.com",
+       "savedTitle": "Kagi",
+       "timeLastActiveAt": 750000000.0
+      }
+     },
+     "title": "Kagi"
+    }
+   },
+   "x2",
+   {
+    "value": {
+     "id": "x2",
+     "parentID": "u1",
+     "childrenIds": [],
+     "createdAt": 750000000.0,
+     "isUnread": false,
+     "data": {
+      "tab": {
+       "savedURL": "https://lobste.rs",
+       "savedTitle": "Lobsters",
+       "timeLastActiveAt": 750000000.0
+      }
+     },
+     "title": "Lobsters"
+    }
+   }
+  ],
+  "spaceModels": [
+   "s1",
+   {
+    "value": {
+     "id": "s1",
+     "title": "Old Space",
+     "containerIDs": [
+      "pinned",
+      "p1",
+      "unpinned",
+      "u1"
+     ],
+     "customInfo": {
+      "iconType": {
+       "emoji": "🦊"
+      }
+     }
+    }
+   }
+  ],
+  "container": {
+   "value": {
+    "orderedSpaceIDs": [
+     "s1"
+    ],
+    "topAppsContainerIDs": []
+   }
+  }
+ }
+}

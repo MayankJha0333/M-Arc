@@ -1,0 +1,433 @@
+{
+ "sidebar": {
+  "containers": [
+   {
+    "global": {}
+   },
+   {
+    "spaces": [
+     "space-work",
+     {
+      "id": "space-work",
+      "title": "Work",
+      "containerIDs": [
+       "pinned",
+       "pin-work",
+       "unpinned",
+       "unpin-work"
+      ],
+      "profile": {
+       "default": true
+      },
+      "customInfo": {
+       "iconType": {
+        "emoji_v2": "💼"
+       },
+       "windowTheme": {
+        "background": {
+         "single": {
+          "_0": {
+           "style": {
+            "color": {
+             "_0": {
+              "primaryColorPalette": {
+               "midTone": {
+                "red": 0.2,
+                "green": 0.4,
+                "blue": 0.8,
+                "alpha": 1,
+                "colorSpace": "extendedSRGB"
+               },
+               "shadedTone": {
+                "red": 0.1,
+                "green": 0.2,
+                "blue": 0.5,
+                "alpha": 1,
+                "colorSpace": "extendedSRGB"
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        },
+        "semanticColorPalettes": {}
+       }
+      }
+     },
+     "space-life",
+     {
+      "id": "space-life",
+      "title": "",
+      "containerIDs": [
+       "unpinned",
+       "unpin-life",
+       "pinned",
+       "pin-life"
+      ],
+      "profile": {
+       "custom": {
+        "_0": {
+         "directoryBasename": "Profile 1"
+        }
+       }
+      },
+      "customInfo": {
+       "iconType": {
+        "icon": "leaf"
+       }
+      }
+     }
+    ],
+    "items": [
+     "pin-work",
+     {
+      "id": "pin-work",
+      "parentID": null,
+      "childrenIds": [
+       "t-gh",
+       "f-design",
+       "split-1",
+       "doc-1"
+      ],
+      "title": null,
+      "data": {
+       "itemContainer": {
+        "containerType": {
+         "spaceItems": {
+          "_0": "space-work"
+         }
+        }
+       }
+      }
+     },
+     "unpin-work",
+     {
+      "id": "unpin-work",
+      "parentID": null,
+      "childrenIds": [
+       "t-hn",
+       "t-blank-title"
+      ],
+      "title": null,
+      "data": {
+       "itemContainer": {
+        "containerType": {
+         "spaceItems": {
+          "_0": "space-work"
+         }
+        }
+       }
+      }
+     },
+     "t-gh",
+     {
+      "id": "t-gh",
+      "parentID": "pin-work",
+      "childrenIds": [],
+      "createdAt": 750000000.0,
+      "isUnread": false,
+      "data": {
+       "tab": {
+        "savedURL": "https://github.com/my-org",
+        "savedTitle": "GitHub — my-org",
+        "timeLastActiveAt": 750000000.0
+       }
+      },
+      "title": "GitHub — my-org"
+     },
+     "f-design",
+     {
+      "id": "f-design",
+      "parentID": "pin-work",
+      "childrenIds": [
+       "t-figma",
+       "f-inner"
+      ],
+      "title": "Design",
+      "data": {
+       "list": {}
+      }
+     },
+     "t-figma",
+     {
+      "id": "t-figma",
+      "parentID": "f-design",
+      "childrenIds": [],
+      "createdAt": 750000000.0,
+      "isUnread": false,
+      "data": {
+       "tab": {
+        "savedURL": "https://www.figma.com/files/recent",
+        "savedTitle": "Figma",
+        "timeLastActiveAt": 750000000.0
+       }
+      }
+     },
+     "f-inner",
+     {
+      "id": "f-inner",
+      "parentID": "f-design",
+      "childrenIds": [
+       "t-dribbble"
+      ],
+      "title": "Inspiration",
+      "data": {
+       "list": {}
+      }
+     },
+     "t-dribbble",
+     {
+      "id": "t-dribbble",
+      "parentID": "f-inner",
+      "childrenIds": [],
+      "createdAt": 750000000.0,
+      "isUnread": false,
+      "data": {
+       "tab": {
+        "savedURL": "https://dribbble.com/shots",
+        "savedTitle": "Dribbble",
+        "timeLastActiveAt": 750000000.0
+       }
+      },
+      "title": "Dribbble"
+     },
+     "split-1",
+     {
+      "id": "split-1",
+      "parentID": "pin-work",
+      "childrenIds": [
+       "t-docs",
+       "t-mdn"
+      ],
+      "title": null,
+      "data": {
+       "splitView": {
+        "layoutOrientation": "horizontal"
+       }
+      }
+     },
+     "t-docs",
+     {
+      "id": "t-docs",
+      "parentID": "split-1",
+      "childrenIds": [],
+      "createdAt": 750000000.0,
+      "isUnread": false,
+      "data": {
+       "tab": {
+        "savedURL": "https://docs.example.com",
+        "savedTitle": "Docs",
+        "timeLastActiveAt": 750000000.0
+       }
+      },
+      "title": "Docs"
+     },
+     "t-mdn",
+     {
+      "id": "t-mdn",
+      "parentID": "split-1",
+      "childrenIds": [],
+      "createdAt": 750000000.0,
+      "isUnread": false,
+      "data": {
+       "tab": {
+        "savedURL": "https://developer.mozilla.org",
+        "savedTitle": "MDN",
+        "timeLastActiveAt": 750000000.0
+       }
+      },
+      "title": "MDN"
+     },
+     "doc-1",
+     {
+      "id": "doc-1",
+      "parentID": "pin-work",
+      "childrenIds": [],
+      "title": "Standup notes",
+      "data": {
+       "arcDocument": {
+        "arcDocumentID": "abc-123"
+       }
+      }
+     },
+     "t-hn",
+     {
+      "id": "t-hn",
+      "parentID": "unpin-work",
+      "childrenIds": [],
+      "createdAt": 750000000.0,
+      "isUnread": false,
+      "data": {
+       "tab": {
+        "savedURL": "https://news.ycombinator.com",
+        "savedTitle": "Hacker News",
+        "timeLastActiveAt": 750000000.0
+       }
+      },
+      "title": "Hacker News"
+     },
+     "t-blank-title",
+     {
+      "id": "t-blank-title",
+      "parentID": "unpin-work",
+      "childrenIds": [],
+      "createdAt": 750000000.0,
+      "isUnread": false,
+      "data": {
+       "tab": {
+        "savedURL": "https://example.org/page",
+        "savedTitle": "",
+        "timeLastActiveAt": 750000000.0
+       }
+      }
+     },
+     "pin-life",
+     {
+      "id": "pin-life",
+      "parentID": null,
+      "childrenIds": [
+       "t-cal",
+       "easel-1"
+      ],
+      "title": null,
+      "data": {
+       "itemContainer": {}
+      }
+     },
+     "unpin-life",
+     {
+      "id": "unpin-life",
+      "parentID": null,
+      "childrenIds": [
+       "t-yt",
+       "t-bad"
+      ],
+      "title": null,
+      "data": {
+       "itemContainer": {}
+      }
+     },
+     "t-cal",
+     {
+      "id": "t-cal",
+      "parentID": "pin-life",
+      "childrenIds": [],
+      "createdAt": 750000000.0,
+      "isUnread": false,
+      "data": {
+       "tab": {
+        "savedURL": "https://calendar.example.com",
+        "savedTitle": "Calendar",
+        "timeLastActiveAt": 750000000.0
+       }
+      },
+      "title": "Calendar"
+     },
+     "easel-1",
+     {
+      "id": "easel-1",
+      "parentID": "pin-life",
+      "childrenIds": [],
+      "title": "Moodboard",
+      "data": {
+       "easel": {
+        "easelID": "e1"
+       }
+      }
+     },
+     "t-yt",
+     {
+      "id": "t-yt",
+      "parentID": "unpin-life",
+      "childrenIds": [],
+      "createdAt": 750000000.0,
+      "isUnread": false,
+      "data": {
+       "tab": {
+        "savedURL": "https://www.youtube.com/watch?v=1",
+        "savedTitle": "Video",
+        "timeLastActiveAt": 750000000.0
+       }
+      },
+      "title": "Video"
+     },
+     "t-bad",
+     {
+      "id": "t-bad",
+      "parentID": "unpin-life",
+      "childrenIds": [],
+      "title": "Broken",
+      "data": {
+       "tab": {
+        "savedURL": "javascript:alert(1)"
+       }
+      }
+     },
+     "fav-default",
+     {
+      "id": "fav-default",
+      "parentID": null,
+      "childrenIds": [
+       "t-mail",
+       "t-music"
+      ],
+      "title": null,
+      "data": {
+       "itemContainer": {
+        "containerType": {
+         "topApps": {
+          "_0": {
+           "default": true
+          }
+         }
+        }
+       }
+      }
+     },
+     "t-mail",
+     {
+      "id": "t-mail",
+      "parentID": "fav-default",
+      "childrenIds": [],
+      "createdAt": 750000000.0,
+      "isUnread": false,
+      "data": {
+       "tab": {
+        "savedURL": "https://mail.example.com",
+        "savedTitle": "Mail",
+        "timeLastActiveAt": 750000000.0
+       }
+      },
+      "title": "Mail"
+     },
+     "t-music",
+     {
+      "id": "t-music",
+      "parentID": "fav-default",
+      "childrenIds": [],
+      "createdAt": 750000000.0,
+      "isUnread": false,
+      "data": {
+       "tab": {
+        "savedURL": "https://open.spotify.com",
+        "savedTitle": "Spotify",
+        "timeLastActiveAt": 750000000.0
+       }
+      },
+      "title": "Spotify"
+     }
+    ],
+    "topAppsContainerIDs": [
+     {
+      "default": true
+     },
+     "fav-default"
+    ]
+   }
+  ]
+ },
+ "sidebarSyncState": {},
+ "version": 1
+}

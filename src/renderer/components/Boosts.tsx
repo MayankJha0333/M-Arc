@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Wand2, Trash2, X, Plus, Upload, Download, Pencil, Crosshair, AlertTriangle } from 'lucide-react';
 import { addZap, BOOST_FONTS, createBoost, deleteBoost, exportBoosts, importBoosts, removeZap, updateBoost, boostsFor } from '@shared/boosts';
 import { zapPickerScript } from '@shared/zap';
@@ -66,6 +66,18 @@ export function BoostEditor({ id }: { id: ID }) {
     const t = setTimeout(() => b && js !== b.js && act((d) => updateBoost(d, id, { js }, now())), 400);
     return () => clearTimeout(t);
   }, [js]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Closing the editor right after typing must not lose the last keystrokes.
+  const latest = useRef({ css, js });
+  latest.current = { css, js };
+  useEffect(
+    () => () => {
+      const cur = getS().boosts.find((x) => x.id === id);
+      if (!cur) return;
+      const { css: c, js: j } = latest.current;
+      if (c !== cur.css || j !== cur.js) act((d) => updateBoost(d, id, { css: c, js: j }, now()));
+    },
+    [id],
+  );
   if (!b) return null;
   const set = (patch: Parameters<typeof updateBoost>[2]) => act((d) => updateBoost(d, id, patch, now()));
   return (
