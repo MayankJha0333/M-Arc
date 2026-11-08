@@ -4,7 +4,8 @@
 // Electron has no setting for Chromium's video window, so this is the only way in.
 
 import { BrowserWindow } from 'electron';
-import { floatingFlags, isPipWindow, needsFloating, NS, type NativeWindowInfo } from '../shared/pipWindow';
+import { isPipWindow, NS, type NativeWindowInfo } from '../shared/pipWindow';
+import { makePanel, PANEL_PREFIX, type ClassRuntime } from './objcPanel';
 
 type Log = (msg: string) => void;
 type Fn = (...args: unknown[]) => unknown;
@@ -24,6 +25,8 @@ interface ObjC {
   setInt(obj: number, sel: number, v: number): void;
   setBool(obj: number, sel: number, v: boolean): void;
   call(obj: number, sel: number): void;
+  /** For building the panel subclass. */
+  runtime: ClassRuntime;
 }
 
 let objc: ObjC | null | false = null;
@@ -52,12 +55,33 @@ function load(log: Log): ObjC | null {
     const setInt = f('void', [P, P, 'intptr_t']);
     const setBool = f('void', [P, P, 'bool']);
     const call = f('void', [P, P]);
+    const getObjClass = lib.func('object_getClass', P, [P]) as Fn;
+    const lookUp = lib.func('objc_lookUpClass', P, ['str']) as Fn;
+    const allocPair = lib.func('objc_allocateClassPair', P, [P, 'str', 'size_t']) as Fn;
+    const regPair = lib.func('objc_registerClassPair', 'void', [P]) as Fn;
+    const getImp = lib.func('class_getMethodImplementation', 'void *', [P, P]) as Fn;
+    const addMethod = lib.func('class_addMethod', 'bool', [P, P, 'void *', 'str']) as Fn;
+    const setClass = lib.func('object_setClass', P, [P, P]) as Fn;
+    const selOf = (n: string) => {
+      let s = selCache.get(n);
+      if (s === undefined) selCache.set(n, (s = Number(selFn(n))));
+      return s;
+    };
+    const runtime: ClassRuntime = {
+      koffi,
+      sel: selOf,
+      objectGetClass: (o) => Number(getObjClass(o)),
+      className: (o) => String(nameFn(o) ?? ''),
+      lookUpClass: (n) => Number(lookUp(n) ?? 0),
+      allocateClassPair: (c, n) => Number(allocPair(c, n, 0) ?? 0),
+      registerClassPair: (c) => void regPair(c),
+      getImp: (c, s) => getImp(c, s),
+      addMethod: (c, s, imp, t) => !!addMethod(c, s, imp, t),
+      setClass: (o, c) => void setClass(o, c),
+    };
     objc = {
-      sel: (n) => {
-        let s = selCache.get(n);
-        if (s === undefined) selCache.set(n, (s = Number(selFn(n))));
-        return s;
-      },
+      runtime,
+      sel: selOf,
       cls: (n) => Number(clsFn(n)),
       className: (o) => String(nameFn(o) ?? ''),
       send: (o, s) => Number(send(o, s)),
@@ -129,19 +153,27 @@ export function floatPipWindows(log: Log, why: string, reportMissing = true): nu
       return 0;
     }
     for (const w of pip) {
-      if (!needsFloating(w)) continue;
-      const f = floatingFlags(w.styleMask, w.behavior);
-      o.setUInt(w.addr, o.sel('setStyleMask:'), f.styleMask);
-      o.setUInt(w.addr, o.sel('setCollectionBehavior:'), f.behavior);
-      o.setInt(w.addr, o.sel('setLevel:'), NS.PanelLevel);
+      if (w.className.startsWith(PANEL_PREFIX)) continue; // done already
+      // 1. Make it a panel: it now always reports the panel flag and always keeps
+      //    "every desktop + over full-screen apps" (Chromium can't undo it).
+      const result = makePanel(o.runtime, w.addr, {
+        styleBits: NS.NonactivatingPanel,
+        behaviorBits: NS.CanJoinAllSpaces | NS.FullScreenAuxiliary,
+        behaviorClear: NS.MoveToActiveSpace,
+      });
+      // 2. Re-apply both so macOS re-reads them.
+      o.setUInt(w.addr, o.sel('setStyleMask:'), o.send(w.addr, o.sel('styleMask')));
+      o.setUInt(w.addr, o.sel('setCollectionBehavior:'), o.send(w.addr, o.sel('collectionBehavior')));
+      o.setInt(w.addr, o.sel('setLevel:'), NS.FloatingLevel);
       o.setBool(w.addr, o.sel('setHidesOnDeactivate:'), false);
-      // Private AppKit switch that NSPanel uses for "don't activate the app"; skipped if it's missing.
+      // 3. The switch NSPanel itself flips for "don't activate the app", if this macOS has it.
       const prevent = o.sel('_setPreventsActivation:');
-      if (o.sendBoolArg(w.addr, o.sel('respondsToSelector:'), prevent)) o.setBool(w.addr, prevent, true);
+      const hasPrevent = o.sendBoolArg(w.addr, o.sel('respondsToSelector:'), prevent);
+      if (hasPrevent) o.setBool(w.addr, prevent, true);
       o.call(w.addr, o.sel('orderFrontRegardless'));
       const after = listWindows(o).find((x) => x.addr === w.addr);
       log(
-        `panel (${why}): ${w.className} level ${w.level}→${after?.level} mask ${w.styleMask}→${after?.styleMask} behaviour ${w.behavior}→${after?.behavior}`,
+        `panel (${why}): ${w.className} → ${result}; mask ${w.styleMask}→${after?.styleMask} behaviour ${w.behavior}→${after?.behavior} level ${after?.level} preventsActivation ${hasPrevent ? 'set' : 'n/a'}`,
       );
     }
     return pip.length;

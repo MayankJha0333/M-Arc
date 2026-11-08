@@ -14,8 +14,6 @@ export const NS = {
   FullScreenAuxiliary: 1 << 8,
   /** Window level Chromium uses for the floating video. */
   FloatingLevel: 3,
-  /** Above normal and floating windows, below menus and alerts. */
-  PanelLevel: 24,
 } as const;
 
 export interface NativeWindowInfo {
@@ -29,23 +27,9 @@ export interface NativeWindowInfo {
 
 /**
  * Is this the floating video window? It's a visible Chromium window (not one of
- * Kite's own windows) at the "floating" level, or one we already turned into a panel.
+ * Kite's own windows) at the "floating" level.
  */
 export function isPipWindow(w: NativeWindowInfo, ours: ReadonlySet<number>): boolean {
   if (ours.has(w.addr) || !w.visible || !/NativeWidgetMac/.test(w.className)) return false;
-  return w.level === NS.FloatingLevel || (w.level === NS.PanelLevel && (w.styleMask & NS.NonactivatingPanel) !== 0);
-}
-
-/** Does it still need changing? */
-export function needsFloating(w: NativeWindowInfo): boolean {
-  const f = floatingFlags(w.styleMask, w.behavior);
-  return w.level !== NS.PanelLevel || f.styleMask !== w.styleMask || f.behavior !== w.behavior;
-}
-
-/** The style mask and collection behaviour that let a window float over everything. */
-export function floatingFlags(styleMask: number, behavior: number): { styleMask: number; behavior: number } {
-  return {
-    styleMask: (styleMask | NS.NonactivatingPanel) >>> 0,
-    behavior: ((behavior | NS.CanJoinAllSpaces | NS.FullScreenAuxiliary) & ~NS.MoveToActiveSpace) >>> 0,
-  };
+  return w.level === NS.FloatingLevel;
 }
