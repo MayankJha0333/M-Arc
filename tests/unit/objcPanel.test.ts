@@ -3,7 +3,7 @@
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
-import { makePanel, type ClassRuntime } from '../../src/main/objcPanel';
+import { isPanel, makePanel, type ClassRuntime } from '../../src/main/objcPanel';
 
 const LIB = ['/usr/lib/x86_64-linux-gnu/libobjc.so.4', '/usr/lib/aarch64-linux-gnu/libobjc.so.4'].find((p) => existsSync(p));
 const NAP = 1 << 7;
@@ -22,7 +22,7 @@ describe.skipIf(!LIB)('turning a live window object into a panel (Objective-C ru
   const regPair = fn('objc_registerClassPair', 'void', [P]);
   const addMethod = fn('class_addMethod', 'bool', [P, P, 'void *', 'str']);
   const getImp = fn('class_getMethodImplementation', 'void *', [P, P]);
-  const setClass = fn('object_setClass', P, [P, P]);
+  const replaceMethod = fn('class_replaceMethod', 'void *', [P, P, 'void *', 'str']);
   const className = fn('object_getClassName', 'str', [P]);
   const createInstance = fn('class_createInstance', P, [P, 'size_t']);
   const msgLookup = fn('objc_msg_lookup', 'void *', [P, P]);
@@ -43,6 +43,9 @@ describe.skipIf(!LIB)('turning a live window object into a panel (Objective-C ru
   addMethod(Win, sel('setCollectionBehavior:'), keep[1], 'v@:Q');
   addMethod(Win, sel('collectionBehavior'), keep[2], 'Q@:');
   regPair(Win);
+  // Like macOS's hidden change-watching class: a subclass that only inherits these methods.
+  const Watched = Number(allocPair(Win, 'NSKVONotifying_FakeVideoWindow', 0));
+  regPair(Watched);
 
   const rt: ClassRuntime = {
     koffi,
@@ -50,19 +53,24 @@ describe.skipIf(!LIB)('turning a live window object into a panel (Objective-C ru
     // GCC doesn't export object_getClass; look the class up by name instead.
     objectGetClass: (o) => Number(lookUpClass(className(o))),
     className: (o) => String(className(o)),
-    lookUpClass: (n) => Number(lookUpClass(n) ?? 0),
-    allocateClassPair: (c, n) => Number(allocPair(c, n, 0) ?? 0),
-    registerClassPair: (c) => void regPair(c),
     getImp: (c, s) => getImp(c, s),
-    addMethod: (c, s, imp, t) => !!addMethod(c, s, imp, t),
-    setClass: (o, c) => void setClass(o, c),
+    replaceMethod: (c, s, imp, t) => void replaceMethod(c, s, imp, t),
   };
 
-  it('the window then reports the panel flag, keeping its own flags', () => {
+  it('the window reports the panel flag (keeping its own flags) and keeps its class', () => {
     const w = Number(createInstance(Win, 0));
     expect(get(w, 'styleMask')).toBe(32776);
-    expect(makePanel(rt, w, flags)).toBe('now KitePanel_FakeVideoWindow');
+    expect(makePanel(rt, w, flags)).toBe('panel (patched FakeVideoWindow)');
     expect(get(w, 'styleMask')).toBe(32776 | NAP);
+    expect(String(className(w))).toBe('FakeVideoWindow'); // the class is never swapped (that crashed macOS)
+  });
+
+  it('other windows of the same kind are left exactly as they were', () => {
+    const other = Number(createInstance(Win, 0));
+    expect(isPanel(other)).toBe(false);
+    expect(get(other, 'styleMask')).toBe(32776);
+    set(other, 'setCollectionBehavior:', 2 | 4);
+    expect(get(other, 'collectionBehavior')).toBe(2 | 4);
   });
 
   it('always keeps "every desktop + over full-screen apps", whatever the window asks for later', () => {
@@ -72,12 +80,21 @@ describe.skipIf(!LIB)('turning a live window object into a panel (Objective-C ru
     expect(get(w, 'collectionBehavior')).toBe(4 | 32 | 1 | 256);
   });
 
-  it('is done once per window, and the new class is shared by later windows', () => {
+  it('is done once per window; later windows reuse the patched class', () => {
     const a = Number(createInstance(Win, 0));
     const b = Number(createInstance(Win, 0));
     makePanel(rt, a, flags);
     expect(makePanel(rt, a, flags)).toBe('already a panel');
-    expect(makePanel(rt, b, flags)).toBe('now KitePanel_FakeVideoWindow');
+    expect(makePanel(rt, b, flags)).toBe('panel (reused FakeVideoWindow)');
     expect(get(b, 'styleMask')).toBe(32776 | NAP);
+  });
+
+  it('works for a window whose class only inherits the methods (a watched window)', () => {
+    const w = Number(createInstance(Watched, 0));
+    const plain = Number(createInstance(Win, 0));
+    expect(makePanel(rt, w, flags)).toBe('panel (patched NSKVONotifying_FakeVideoWindow)');
+    expect(get(w, 'styleMask')).toBe(32776 | NAP);
+    expect(get(plain, 'styleMask')).toBe(32776);
+    expect(String(className(w))).toBe('NSKVONotifying_FakeVideoWindow');
   });
 });

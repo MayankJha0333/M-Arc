@@ -24,8 +24,4 @@ describe('finding the floating video window (macOS)', () => {
     expect(isPipWindow(win({ level: 0 }), new Set())).toBe(false); // a normal window
     expect(isPipWindow(win({ level: 101 }), new Set())).toBe(false); // a menu
   });
-
-  it('still finds it after it became a panel (so it is not changed twice)', () => {
-    expect(isPipWindow(win({ className: 'KitePanel_NSKVONotifying_NativeWidgetMacFramelessNSWindow' }), new Set())).toBe(true);
-  });
 });
