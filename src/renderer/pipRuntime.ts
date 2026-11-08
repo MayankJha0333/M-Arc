@@ -60,6 +60,8 @@ export function startPip() {
     if (after.join('|') !== before.join('|')) {
       const s = st.s.settings;
       const plan = planOnSwitch(before, after, st.ui.playing, st.ui.pipped, s, focusedBefore);
+      const playing = before.filter((id) => st.ui.playing[id]);
+      bridge.debugLog(`switch: left [${before}] playing [${playing}] → pop out ${plan.enter ?? 'nothing'}, return [${plan.exit}]`);
       before = after;
       focusedBefore = focusedNow;
       void apply(plan);

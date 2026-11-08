@@ -102,6 +102,8 @@ function makeWebBridge(): KiteBridge {
     execIsolated: async () => null,
     pipEnter: async () => false,
     pipExit: async () => undefined,
+    mediaPlaying: async () => false,
+    debugLog() {},
     setPipTargets: (ids) => {
       pipTargets = [...ids];
     },

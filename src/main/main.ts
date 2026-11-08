@@ -23,7 +23,7 @@ import { Storage } from './storage';
 import { findAction, toAccelerator } from '../shared/shortcuts';
 import { hostOf } from '../shared/url';
 import type { OpenRequest } from '../shared/ipc';
-import { PIP_ENTER_SCRIPT, PIP_EXIT_SCRIPT, pipPopped } from '../shared/pip';
+import { MEDIA_PLAYING_SCRIPT, PIP_ENTER_SCRIPT, PIP_EXIT_SCRIPT, pipPopped } from '../shared/pip';
 
 const isMac = process.platform === 'darwin';
 const devUrl = process.env.KITE_DEV_URL;
@@ -498,6 +498,22 @@ function setupIpc() {
     if (pipLeft?.wcId === id) pipLeft = null;
     await exitPip(id);
   });
+  // A page said "media paused" — but one paused video (a preview, an ad) doesn't mean
+  // nothing plays any more. Check every frame.
+  handle('page:media-playing', async (e, id: number) => {
+    const page = pages.get(id);
+    const wc = allWebContents.fromId(id);
+    if (!page || page.host !== e.sender || !wc || wc.isDestroyed()) return false;
+    for (const frame of wc.mainFrame.framesInSubtree) {
+      try {
+        if ((await frame.executeJavaScript(MEDIA_PLAYING_SCRIPT)) === true) return true;
+      } catch {
+        /* frame went away */
+      }
+    }
+    return false;
+  });
+  on('debug:log', (_e, msg: string) => typeof msg === 'string' && debugLog(msg.slice(0, 500)));
   // Which tabs to pop out if you switch apps — kept up to date by the main window.
   on('pip:targets', (e, tabIds: string[]) => {
     if (!mainWindow || e.sender !== mainWindow.webContents || !Array.isArray(tabIds)) return;

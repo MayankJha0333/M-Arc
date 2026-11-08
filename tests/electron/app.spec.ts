@@ -329,3 +329,28 @@ test('video pop-out: another app’s window taking focus really triggers it', as
   await expect.poll(inPip, { timeout: 10000 }).toBe(false);
   await app.close();
 });
+
+test('video pop-out: works on tab switch even when another video on the page stopped (like YouTube previews)', async () => {
+  const { app, win } = await launch();
+  await open(win, site.url('/video?busy'));
+  await expect(win.locator('[data-title="Video Page"] [data-testid^="sound-"]')).toBeVisible({ timeout: 15000 });
+  const inPip = () =>
+    app.evaluate(async ({ webContents }) => {
+      const wc = webContents.getAllWebContents().find((w) => w.getType() === 'webview' && w.getURL().includes('/video'));
+      return wc ? wc.executeJavaScript('!!document.pictureInPictureElement') : null;
+    });
+  // Wait until the small video has started and stopped again; the main one keeps playing.
+  await win.waitForTimeout(3000);
+  await expect(win.locator('[data-title="Video Page"] [data-testid^="sound-"]')).toBeVisible();
+  await open(win, site.url('/two'));
+  await expect.poll(inPip, { timeout: 10000 }).toBe(true);
+  // Back to the video, then really pause it: now the page counts as stopped.
+  await win.locator('[data-title="Video Page"]').click();
+  await expect.poll(inPip, { timeout: 10000 }).toBe(false);
+  await app.evaluate(async ({ webContents }) => {
+    const wc = webContents.getAllWebContents().find((w) => w.getType() === 'webview' && w.getURL().includes('/video'))!;
+    await wc.executeJavaScript("document.getElementById('v').pause()");
+  });
+  await expect(win.locator('[data-title="Video Page"] [data-testid^="sound-"]')).toHaveCount(0, { timeout: 10000 });
+  await app.close();
+});

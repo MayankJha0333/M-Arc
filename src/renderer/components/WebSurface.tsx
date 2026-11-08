@@ -105,8 +105,20 @@ function ElectronSurface({ id, initialUrl, visible, ...ev }: Props) {
       if (m) evRef.current.onLink(m.decision as 'peek' | 'little', m.url);
     };
     const onFocus = () => evRef.current.onFocus?.();
-    const onPlay = () => evRef.current.onMedia?.(true);
-    const onPause = () => evRef.current.onMedia?.(false);
+    let pauseCheck = 0;
+    const onPlay = () => {
+      pauseCheck++; // a newer event wins over a check still in flight
+      evRef.current.onMedia?.(true);
+    };
+    // One video pausing (a preview, an ad) doesn't mean the page went quiet: check the whole page.
+    const onPause = () => {
+      const n = ++pauseCheck;
+      if (wcId === null) return evRef.current.onMedia?.(false);
+      void bridge
+        .mediaPlaying(wcId)
+        .catch(() => false)
+        .then((still) => n === pauseCheck && evRef.current.onMedia?.(still));
+    };
     wv.addEventListener('media-started-playing', onPlay);
     wv.addEventListener('media-paused', onPause);
     wv.addEventListener('dom-ready', onReady);

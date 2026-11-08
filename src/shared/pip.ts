@@ -64,3 +64,6 @@ export function appSwitchTargets(visible: ID[], s: PipSettings, focused?: ID | n
   if (!s.autoPip || !s.autoPipOnAppSwitch) return [];
   return focused && visible.includes(focused) ? [focused, ...visible.filter((id) => id !== focused)] : [...visible];
 }
+
+/** Is any video or audio on this page (frame) still playing? Pages often have several. */
+export const MEDIA_PLAYING_SCRIPT = `Array.from(document.querySelectorAll('video, audio')).some((m) => !m.paused && !m.ended)`;

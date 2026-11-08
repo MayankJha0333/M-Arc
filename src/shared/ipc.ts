@@ -27,6 +27,10 @@ export interface KiteBridge {
   /** Pop a page's playing video out into a floating window. Resolves true if one popped out. */
   pipEnter(webContentsId: number): Promise<boolean>;
   pipExit(webContentsId: number): Promise<void>;
+  /** Is any video or audio in this page still playing (checks every frame)? */
+  mediaPlaying(webContentsId: number): Promise<boolean>;
+  /** Write a line to kite-debug.log (only when running from source). */
+  debugLog(msg: string): void;
   /** Tabs to pop a video out of the moment you switch to another app (best first). */
   setPipTargets(tabIds: string[]): void;
   /** The main process popped a video out (you left Kite) or put it back (you returned). */
