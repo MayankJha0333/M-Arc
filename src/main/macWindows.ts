@@ -6,8 +6,8 @@
 import { app, BrowserWindow } from 'electron';
 import { existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { isPipWindow, NS, type NativeWindowInfo } from '../shared/pipWindow';
-import { isPanel, makePanel, type ClassRuntime } from './objcPanel';
+import { isPipWindow, isVideoWindowSetup, NS, type NativeWindowInfo } from '../shared/pipWindow';
+import { installPanelHooks, isPanel, markPanel, type ClassRuntime } from './objcPanel';
 
 type Log = (msg: string) => void;
 type Fn = (...args: unknown[]) => unknown;
@@ -27,7 +27,7 @@ interface ObjC {
   setInt(obj: number, sel: number, v: number): void;
   setBool(obj: number, sel: number, v: boolean): void;
   call(obj: number, sel: number): void;
-  /** For building the panel subclass. */
+  /** For the panel hooks. */
   runtime: ClassRuntime;
 }
 
@@ -69,18 +69,20 @@ const clearGuard = () => {
   }
 };
 let guardTimer: ReturnType<typeof setTimeout> | null = null;
-function guarded<T>(fn: () => T): T {
+function armGuard() {
   try {
     writeFileSync(guardFile(), buildId());
   } catch {
     /* ignore */
   }
   if (!guardTimer) app.once('will-quit', clearGuard); // a normal quit is not a crash
-  const out = fn();
   // Survived the change and half a minute of macOS using it (switching apps etc.): clear the marker.
   if (guardTimer) clearTimeout(guardTimer);
   guardTimer = setTimeout(clearGuard, 30_000);
-  return out;
+}
+function guarded<T>(fn: () => T): T {
+  armGuard();
+  return fn();
 }
 
 function load(log: Log): ObjC | null {
@@ -109,6 +111,7 @@ function load(log: Log): ObjC | null {
     const call = f('void', [P, P]);
     const getObjClass = lib.func('object_getClass', P, [P]) as Fn;
     const getImp = lib.func('class_getMethodImplementation', 'void *', [P, P]) as Fn;
+    const getMethod = lib.func('class_getInstanceMethod', P, [P, P]) as Fn;
     const replaceMethod = lib.func('class_replaceMethod', 'void *', [P, P, 'void *', 'str']) as Fn;
     const selOf = (n: string) => {
       let s = selCache.get(n);
@@ -120,8 +123,14 @@ function load(log: Log): ObjC | null {
       sel: selOf,
       objectGetClass: (o) => Number(getObjClass(o)),
       className: (o) => String(nameFn(o) ?? ''),
+      hasMethod: (c, s) => Number(getMethod(c, s) ?? 0) !== 0,
       getImp: (c, s) => getImp(c, s),
       replaceMethod: (c, s, imp, t) => void replaceMethod(c, s, imp, t),
+      getUInt: (o, s) => Number(send(o, s)),
+      getInt: (o, s) => Number(sendLevel(o, s)),
+      setUInt: (o, s, v) => void setUInt(o, s, v),
+      setBool: (o, s, v) => void setBool(o, s, v),
+      respondsTo: (o, s) => !!sendBoolArg(o, selOf('respondsToSelector:'), s),
     };
     objc = {
       runtime,
@@ -179,6 +188,32 @@ function listWindows(o: ObjC): NativeWindowInfo[] {
   return out;
 }
 
+const reported = new Set<number>();
+
+/**
+ * macOS: install the hooks that make Chromium's floating video window a panel as
+ * it's being set up. Call once at startup, before any video pops out.
+ */
+export function installVideoPanelHooks(log: Log) {
+  const o = load(log);
+  if (!o) return;
+  try {
+    const report = guarded(() =>
+      installPanelHooks(o.runtime, o.cls('NSWindow'), {
+        styleBits: NS.NonactivatingPanel,
+        behaviorBits: NS.CanJoinAllSpaces | NS.FullScreenAuxiliary,
+        behaviorClear: NS.MoveToActiveSpace,
+        isVideoWindow: isVideoWindowSetup,
+        log: (m) => log(`panel: ${m}`),
+        onMark: armGuard,
+      }),
+    );
+    log(`panel: ${report}`);
+  } catch (err) {
+    log(`panel: could not install hooks: ${(err as Error).message}`);
+  }
+}
+
 /**
  * Find the floating video window and turn it into an always-on-top panel that
  * shows on every desktop and over full-screen apps. Returns how many video windows there are.
@@ -197,31 +232,19 @@ export function floatPipWindows(log: Log, why: string, reportMissing = true): nu
       return 0;
     }
     for (const w of pip) {
-      if (isPanel(w.addr) && (w.styleMask & NS.NonactivatingPanel) !== 0) continue; // done already
-      // 1. Make it a panel: it now always reports the panel flag and always keeps
-      //    "every desktop + over full-screen apps" (Chromium can't undo it).
-      const result = guarded(() =>
-        makePanel(o.runtime, w.addr, {
-          styleBits: NS.NonactivatingPanel,
-          behaviorBits: NS.CanJoinAllSpaces | NS.FullScreenAuxiliary,
-          behaviorClear: NS.MoveToActiveSpace,
-        }),
-      );
-      log(`panel (${why}): ${result}`);
-      // 2. Re-apply both so macOS re-reads them.
-      o.setUInt(w.addr, o.sel('setStyleMask:'), o.send(w.addr, o.sel('styleMask')));
-      o.setUInt(w.addr, o.sel('setCollectionBehavior:'), o.send(w.addr, o.sel('collectionBehavior')));
-      o.setInt(w.addr, o.sel('setLevel:'), NS.FloatingLevel);
-      o.setBool(w.addr, o.sel('setHidesOnDeactivate:'), false);
-      log(`panel (${why}): flags re-applied`);
-      // 3. The switch NSPanel itself flips for "don't activate the app", if this macOS has it.
-      const prevent = o.sel('_setPreventsActivation:');
-      const hasPrevent = o.sendBoolArg(w.addr, o.sel('respondsToSelector:'), prevent);
-      if (hasPrevent) o.setBool(w.addr, prevent, true);
-      o.call(w.addr, o.sel('orderFrontRegardless'));
-      const after = listWindows(o).find((x) => x.addr === w.addr);
+      if (reported.has(w.addr)) continue;
+      reported.add(w.addr);
+      const early = isPanel(w.addr);
+      if (!early) {
+        // Slipped past the setup hooks (e.g. it existed before they were installed): mark it now.
+        log(`panel (${why}): ${markPanel(o.runtime, w.addr, 'found on screen')}`);
+        o.call(w.addr, o.sel('orderFrontRegardless'));
+      }
+      const selNonAct = o.sel('_isNonactivatingPanel');
+      const nonAct = o.sendBoolArg(w.addr, o.sel('respondsToSelector:'), selNonAct) ? o.sendBool(w.addr, selNonAct) : null;
+      const now = listWindows(o).find((x) => x.addr === w.addr);
       log(
-        `panel (${why}): ${w.className} → ${result}; mask ${w.styleMask}→${after?.styleMask} behaviour ${w.behavior}→${after?.behavior} level ${after?.level} preventsActivation ${hasPrevent ? 'set' : 'n/a'}`,
+        `panel (${why}): video window ${w.className} — ${early ? 'made a panel before it was shown' : 'made a panel late (fallback)'}; isNonactivatingPanel ${nonAct}; mask ${now?.styleMask}; behaviour ${now?.behavior}; level ${now?.level}`,
       );
     }
     return pip.length;

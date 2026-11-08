@@ -33,3 +33,12 @@ export function isPipWindow(w: NativeWindowInfo, ours: ReadonlySet<number>): boo
   if (ours.has(w.addr) || !w.visible || !/NativeWidgetMac/.test(w.className)) return false;
   return w.level === NS.FloatingLevel;
 }
+
+/**
+ * Seen while Chromium is setting a window up (before it's shown): is it the
+ * floating video window? Chromium's video window is frameless, floats, and joins
+ * every desktop; Kite's own windows are a different kind and never match.
+ */
+export function isVideoWindowSetup(w: { className: string; level: number; behavior: number }): boolean {
+  return /NativeWidgetMacFramelessNSWindow/.test(w.className) && w.level === NS.FloatingLevel && (w.behavior & NS.CanJoinAllSpaces) !== 0;
+}

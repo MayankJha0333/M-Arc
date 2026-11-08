@@ -226,3 +226,19 @@ Every feature in §3 was rebuilt from these notes, written fresh. See README.md 
 **Still to confirm with your real file:** the exact nesting in §2a. The importer accepts
 both known layouts and reports anything it skips, so a mismatch shows up as a clear
 message, not lost data.
+
+---
+
+## 7. Floating video over other apps on macOS (added during the build)
+
+**Goal:** like Arc, a popped-out video stays visible when you switch to another app, including an app in full screen.
+
+| Finding | Status | Evidence |
+|---|---|---|
+| Chromium's (and so Electron's) floating video window is a normal window; macOS keeps it off other apps' full-screen desktops | Confirmed | Kite's debug log on the user's Mac; [Ardia #386](https://github.com/mantrakp04/ardia/issues/386) |
+| Only a *non-activating panel* may appear there; setting the panel style flag on a normal window is silently ignored | Confirmed | Kite log: `mask 32776→32776`; [Zen PR #15287](https://github.com/zen-browser/desktop/pull/15287) measured the same |
+| Arc hosts its floating video in a real panel: non-activating, floating level, every desktop + full-screen auxiliary | Reported by others | Ardia's reading of Arc 1.170 ([PR #396](https://github.com/mantrakp04/ardia/pull/396)) |
+| macOS asks the window `_isNonactivatingPanel`, and checks it **when the window is first shown** | Reported by others | [Ardia PR #396](https://github.com/mantrakp04/ardia/pull/396) (tested on real full-screen Spaces) |
+| Swapping the window's class crashes (macOS's change-watching keeps data in the hidden class) | Confirmed | Kite crashed with SIGSEGV on the user's Mac; Ardia saw the same |
+
+**What Kite does:** at startup on macOS it overrides `_isNonactivatingPanel`, `setLevel:` and `setCollectionBehavior:` on `NSWindow` (via koffi). When Chromium sets up a frameless, floating, every-desktop window — the video window — Kite marks it before it is shown: it answers "panel", keeps "every desktop + over full-screen apps", and doesn't bring Kite forward when clicked. Every other window gets the original answers. If this ever crashes Kite, the next launch of that build skips it.

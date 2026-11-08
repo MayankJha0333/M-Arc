@@ -23,7 +23,7 @@ import { Storage } from './storage';
 import { findAction, toAccelerator } from '../shared/shortcuts';
 import { hostOf } from '../shared/url';
 import type { OpenRequest } from '../shared/ipc';
-import { floatPipWindowsSoon } from './macWindows';
+import { floatPipWindowsSoon, installVideoPanelHooks } from './macWindows';
 import { MEDIA_PLAYING_SCRIPT, PIP_ENTER_SCRIPT, PIP_EXIT_SCRIPT, pipPopped } from '../shared/pip';
 
 const isMac = process.platform === 'darwin';
@@ -647,6 +647,8 @@ if (!gotLock) {
     setupPermissions();
     setupIpc();
     buildAppMenu();
+    // macOS: floating videos become panels, so they show over other apps (even full-screen ones).
+    if (isMac) installVideoPanelHooks(debugLog);
     const argUrl = process.argv.find((a) => isWebUrl(a));
     if (argUrl) pendingExternal.push(argUrl);
     mainWindow = createMainWindow();
