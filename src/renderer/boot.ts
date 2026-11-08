@@ -7,7 +7,7 @@ import * as ops from '@shared/ops';
 import type { Settings } from '@shared/types';
 import { bridge, isMac } from './platform';
 import { getS, getUi, markLoaded, startAutosave, useKite } from './store';
-import { openUrl, runAction, autoArchiveNow, openInSplit } from './commands';
+import { openUrl, runAction, autoArchiveNow, openInSplit, selectItem } from './commands';
 import { handleOpenRequest, handleExternalUrl } from './routingRuntime';
 import { watchBoosts } from './boostRuntime';
 import { startPip } from './pipRuntime';
@@ -47,6 +47,10 @@ export async function boot() {
   bridge.onShortcut((a) => runAction(a));
   bridge.onOpen((req) => handleOpenRequest(req));
   bridge.onExternalUrl((url) => handleExternalUrl(url));
+  // "Back to tab" on the floating video.
+  bridge.onFocusTab((tabId) => {
+    if (useKite.getState().s.items[tabId]) selectItem(tabId);
+  });
   bridge.onOpenSplit(({ url }) => openInSplit(url));
   bridge.onLittleToMain(({ url, spaceId }) => openUrl(url, 'new', { spaceId: spaceId ?? undefined }));
   bridge.onLittleArchived(({ url, title }) =>

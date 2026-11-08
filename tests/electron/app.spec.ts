@@ -354,3 +354,89 @@ test('video pop-out: works on tab switch even when another video on the page sto
   await expect(win.locator('[data-title="Video Page"] [data-testid^="sound-"]')).toHaveCount(0, { timeout: 10000 });
   await app.close();
 });
+
+test('video pop-out: a video the system paused as you switched apps still pops out, and keeps playing', async () => {
+  const { app, win } = await launch();
+  await open(win, site.url('/video'));
+  await expect(win.locator('[data-title="Video Page"] [data-testid^="sound-"]')).toBeVisible({ timeout: 15000 });
+  const video = (js: string) =>
+    app.evaluate(async ({ webContents }, code) => {
+      const wc = webContents.getAllWebContents().find((w) => w.getType() === 'webview' && w.getURL().includes('/video'));
+      return wc ? wc.executeJavaScript(code) : null;
+    }, js);
+  await win.waitForTimeout(600); // a few "still playing" ticks
+  // What Chrome does to some background videos the moment you switch away: pause it (page not in front).
+  await video("Object.defineProperty(document, 'hasFocus', { value: () => false }); document.getElementById('v').pause(); true");
+  expect(await video("document.getElementById('v').paused")).toBe(true);
+  await app.evaluate(({ app }) => app.emit('did-resign-active'));
+  await expect.poll(() => video('!!document.pictureInPictureElement'), { timeout: 10000 }).toBe(true);
+  await expect.poll(() => video("document.getElementById('v').paused"), { timeout: 5000 }).toBe(false);
+  await app.close();
+});
+
+test('video pop-out: a video you paused yourself does not pop out when you switch apps', async () => {
+  const { app, win } = await launch();
+  await open(win, site.url('/video'));
+  await expect(win.locator('[data-title="Video Page"] [data-testid^="sound-"]')).toBeVisible({ timeout: 15000 });
+  const video = (js: string) =>
+    app.evaluate(async ({ webContents }, code) => {
+      const wc = webContents.getAllWebContents().find((w) => w.getType() === 'webview' && w.getURL().includes('/video'));
+      return wc ? wc.executeJavaScript(code) : null;
+    }, js);
+  await video("Object.defineProperty(document, 'hasFocus', { value: () => true }); document.getElementById('v').pause(); true");
+  await win.waitForTimeout(300);
+  await app.evaluate(({ app }) => app.emit('did-resign-active'));
+  await win.waitForTimeout(1000);
+  expect(await video('!!document.pictureInPictureElement')).toBe(false);
+  await app.close();
+});
+
+test('floating video frame: Back to tab, Minimize and Close work in the real app', async () => {
+  const { app, win } = await launch();
+  await open(win, site.url('/video'));
+  await expect(win.locator('[data-title="Video Page"] [data-testid^="sound-"]')).toBeVisible({ timeout: 15000 });
+  const video = (js: string) =>
+    app.evaluate(async ({ webContents }, code) => {
+      const wc = webContents.getAllWebContents().find((w) => w.getType() === 'webview' && w.getURL().includes('/video'));
+      return wc ? wc.executeJavaScript(code) : null;
+    }, js);
+  // Pop it out by switching tabs.
+  await open(win, site.url('/two'));
+  await expect.poll(() => video('!!document.pictureInPictureElement'), { timeout: 10000 }).toBe(true);
+
+  // The frame window (shown by hand here: Linux has no macOS video window to sit on).
+  await app.evaluate(() => (globalThis as any).__kiteTest.pipFrame.showForTest({ x: 200, y: 200, width: 480, height: 270 }));
+  await expect.poll(() => app.windows().some((p) => p.url().includes('mode=pip'))).toBe(true);
+  const frame = app.windows().find((p) => p.url().includes('mode=pip'))!;
+  await frame.waitForSelector('[data-testid=pip-frame]');
+  const bounds = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('mode=pip'))!.getBounds());
+  expect(bounds).toMatchObject({ width: 480, height: 270 });
+  // Never takes focus from what you're doing.
+  expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('mode=pip'))!.isFocusable())).toBe(false);
+
+  const press = async (id: string) => {
+    await frame.mouse.move(240, 140);
+    await frame.getByTestId(id).hover();
+    await frame.getByTestId(id).click();
+  };
+  const actions = () => app.evaluate(() => (globalThis as any).__kiteTest.frameActions as string[]);
+
+  // Minimize is handed to the frame (it resizes the real video window on macOS).
+  await press('pip-frame-minimize');
+  await expect.poll(actions).toContain('minimize');
+
+  // Back to tab: Kite shows the video's tab, and the video goes back into it.
+  await press('pip-frame-back');
+  await expect(win.locator('[data-title="Video Page"]')).toHaveAttribute('data-active', 'true');
+  await expect.poll(() => video('!!document.pictureInPictureElement'), { timeout: 10000 }).toBe(false);
+
+  // Pop out again, then Close: the video goes back into its tab, paused.
+  await open(win, site.url('/two'));
+  await expect.poll(() => video('!!document.pictureInPictureElement'), { timeout: 10000 }).toBe(true);
+  await app.evaluate(() => (globalThis as any).__kiteTest.pipFrame.showForTest({ x: 200, y: 200, width: 480, height: 270 }));
+  await press('pip-frame-close');
+  await expect.poll(() => video('!!document.pictureInPictureElement'), { timeout: 10000 }).toBe(false);
+  expect(await video("document.getElementById('v').paused")).toBe(true);
+  expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('mode=pip'))!.isVisible())).toBe(false);
+  await app.close();
+});

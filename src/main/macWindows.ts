@@ -7,6 +7,7 @@ import { app, BrowserWindow } from 'electron';
 import { existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isPipWindow, isVideoWindowSetup, NS, type NativeWindowInfo } from '../shared/pipWindow';
+import type { Rect } from '../shared/pipFrame';
 import { installPanelHooks, isPanel, markPanel, type ClassRuntime } from './objcPanel';
 
 type Log = (msg: string) => void;
@@ -27,6 +28,13 @@ interface ObjC {
   setInt(obj: number, sel: number, v: number): void;
   setBool(obj: number, sel: number, v: boolean): void;
   call(obj: number, sel: number): void;
+  /** NSWindow -frame (origin bottom-left of the main screen). */
+  frame(win: number): Rect;
+  /** NSWindow -setFrame:display:animate: */
+  setFrame(win: number, r: Rect, animate: boolean): void;
+  setDouble(obj: number, sel: number, v: number): void;
+  /** -addChildWindow:ordered: (1 = above) */
+  addChild(parent: number, child: number, ordered: number): void;
   /** For the panel hooks. */
   runtime: ClassRuntime;
 }
@@ -109,6 +117,12 @@ function load(log: Log): ObjC | null {
     const setInt = f('void', [P, P, 'intptr_t']);
     const setBool = f('void', [P, P, 'bool']);
     const call = f('void', [P, P]);
+    // NSRect is four doubles. On Intel Macs a method returning it uses objc_msgSend_stret.
+    const NSRect = koffi.struct('KiteNSRect', { x: 'double', y: 'double', width: 'double', height: 'double' });
+    const getRect = lib.func(process.arch === 'x64' ? 'objc_msgSend_stret' : 'objc_msgSend', NSRect, [P, P]) as Fn;
+    const setRect = f('void', [P, P, NSRect, 'bool', 'bool']);
+    const setDouble = f('void', [P, P, 'double']);
+    const addChild = f('void', [P, P, P, 'intptr_t']);
     const getObjClass = lib.func('object_getClass', P, [P]) as Fn;
     const getImp = lib.func('class_getMethodImplementation', 'void *', [P, P]) as Fn;
     const getMethod = lib.func('class_getInstanceMethod', P, [P, P]) as Fn;
@@ -146,6 +160,13 @@ function load(log: Log): ObjC | null {
       setInt: (o, s, v) => void setInt(o, s, v),
       setBool: (o, s, v) => void setBool(o, s, v),
       call: (o, s) => void call(o, s),
+      frame: (w) => {
+        const r = getRect(w, selOf('frame')) as Rect;
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      },
+      setFrame: (w, r, animate) => void setRect(w, selOf('setFrame:display:animate:'), r, true, animate),
+      setDouble: (o, s, v) => void setDouble(o, s, v),
+      addChild: (p, c, ord) => void addChild(p, selOf('addChildWindow:ordered:'), c, ord),
     };
     return objc;
   } catch (err) {
@@ -264,5 +285,70 @@ export function floatPipWindowsSoon(log: Log, why: string) {
       if (found) return;
       if (floatPipWindows(log, `${why} +${ms}ms`, ms === times[times.length - 1]) > 0) found = true;
     }, ms);
+  }
+}
+
+// ---- Kite's frame around the floating video --------------------------------------
+
+/** NSWindow address of an Electron window. */
+function nsWindowOf(o: ObjC, bw: BrowserWindow): number {
+  const view = Number(bw.getNativeWindowHandle().readBigUInt64LE(0));
+  return view ? o.send(view, o.sel('window')) : 0;
+}
+
+/** The floating video window on screen now (macOS), with its frame. */
+export function findPipWindow(log: Log): { addr: number; frame: Rect } | null {
+  const o = load(log);
+  if (!o) return null;
+  try {
+    const ours = ownWindows(o);
+    const w = listWindows(o).find((x) => isPipWindow(x, ours));
+    return w ? { addr: w.addr, frame: o.frame(w.addr) } : null;
+  } catch (err) {
+    log(`frame: could not read the video window: ${(err as Error).message}`);
+    return null;
+  }
+}
+
+export function setPipWindowFrame(log: Log, addr: number, cocoaFrame: Rect) {
+  const o = load(log);
+  if (!o) return;
+  try {
+    o.setFrame(addr, cocoaFrame, true);
+  } catch (err) {
+    log(`frame: could not resize the video window: ${(err as Error).message}`);
+  }
+}
+
+/** Rounded corners on the video window, to match the frame's border. */
+export function roundPipWindow(log: Log, addr: number, radius: number) {
+  const o = load(log);
+  if (!o) return;
+  try {
+    const view = o.send(addr, o.sel('contentView'));
+    const layer = view ? o.send(view, o.sel('layer')) : 0;
+    if (!layer) return log('frame: video window has no layer to round');
+    o.setDouble(layer, o.sel('setCornerRadius:'), radius);
+    o.setBool(layer, o.sel('setMasksToBounds:'), true);
+    o.setBool(addr, o.sel('setOpaque:'), false);
+    o.setUInt(addr, o.sel('setBackgroundColor:'), o.send(o.cls('NSColor'), o.sel('clearColor')));
+    o.call(addr, o.sel('invalidateShadow'));
+  } catch (err) {
+    log(`frame: could not round the video window: ${(err as Error).message}`);
+  }
+}
+
+/** Pin Kite's frame window to the video window, so they move together when dragged. */
+export function attachToPipWindow(log: Log, addr: number, frameWindow: BrowserWindow): boolean {
+  const o = load(log);
+  if (!o) return false;
+  try {
+    const child = nsWindowOf(o, frameWindow);
+    if (!child) return false;
+    o.addChild(addr, child, 1);
+    return true;
+  } catch (err) {
+    log(`frame: could not pin the frame to the video: ${(err as Error).message}`);
+    return false;
   }
 }

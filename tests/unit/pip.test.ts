@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appSwitchTargets, PIP_ENTER_SCRIPT, pipPopped, planOnSwitch } from '@shared/pip';
+import { appSwitchTargets, MEDIA_TRACKER_SCRIPT, PIP_ENTER_SCRIPT, pipPopped, planOnSwitch } from '@shared/pip';
 
 const on = { autoPip: true, autoPipOnAppSwitch: true };
 
@@ -73,9 +73,64 @@ describe('pop-out script inside the page', () => {
     expect(await runEnter(page([refused]))).toBe('error NotAllowedError: needs a click');
   });
 
+  it('a video the system paused a moment ago (you were switching away) pops out and keeps playing', async () => {
+    let played = false;
+    const v = video({ paused: true, muted: true, __kitePlayedAt: Date.now() - 300, play: async () => void (played = true) });
+    expect(await runEnter(page([v]))).toBe('ok (resumed)');
+    expect(played).toBe(true);
+  });
+
+  it('a video you paused yourself, or one stopped long ago, stays put', async () => {
+    expect(await runEnter(page([video({ paused: true, __kitePlayedAt: Date.now() - 300, __kiteUserPause: true })]))).toMatch(/^skipped paused-by-you/);
+    expect(await runEnter(page([video({ paused: true, __kitePlayedAt: Date.now() - 60_000 })]))).toMatch(/^skipped paused/);
+  });
+
+  it('a playing video wins over one that just stopped', async () => {
+    let which = '';
+    const stopped = video({ paused: true, __kitePlayedAt: Date.now(), clientWidth: 1200, requestPictureInPicture: async () => void (which = 'stopped') });
+    const playing = video({ requestPictureInPicture: async () => void (which = 'playing') });
+    expect(await runEnter(page([stopped, playing]))).toBe('ok');
+    expect(which).toBe('playing');
+  });
+
   it('only ok and already count as popped out', () => {
+    expect(pipPopped('ok (resumed)')).toBe(true);
+    expect(pipPopped('okay')).toBe(false);
     expect(pipPopped('ok')).toBe(true);
     expect(pipPopped('already')).toBe(true);
     for (const s of ['none', 'off', 'skipped x', 'error y', true, undefined]) expect(pipPopped(s)).toBe(false);
+  });
+});
+
+describe('media tracker inside the page', () => {
+  function fakePage() {
+    const handlers: Record<string, (e: { target: unknown }) => void> = {};
+    const doc = { visibilityState: 'visible', focused: true, hasFocus() { return this.focused; }, addEventListener: (t: string, f: (e: { target: unknown }) => void) => (handlers[t] = f) };
+    const win: Record<string, unknown> = {};
+    new Function('window', 'document', MEDIA_TRACKER_SCRIPT)(win, doc);
+    new Function('window', 'document', MEDIA_TRACKER_SCRIPT)(win, doc); // safe to run twice
+    const v: Record<string, unknown> = { paused: false, play() {} };
+    const fire = (t: string) => handlers[t]({ target: v });
+    return { doc, v, fire, handlers };
+  }
+
+  it('remembers when a video last played', () => {
+    const { v, fire } = fakePage();
+    fire('timeupdate');
+    expect(Date.now() - (v.__kitePlayedAt as number)).toBeLessThan(1000);
+  });
+
+  it('a pause while the page is in front is yours; one while switching away is the system’s', () => {
+    const a = fakePage();
+    a.v.paused = true;
+    a.fire('pause');
+    expect(a.v.__kiteUserPause).toBe(true);
+    const b = fakePage();
+    b.doc.focused = false;
+    b.v.paused = true;
+    b.fire('pause');
+    expect(b.v.__kiteUserPause).toBe(false);
+    b.fire('play');
+    expect(b.v.__kiteUserPause).toBe(false);
   });
 });

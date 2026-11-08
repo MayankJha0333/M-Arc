@@ -31,6 +31,13 @@ export interface KiteBridge {
   mediaPlaying(webContentsId: number): Promise<boolean>;
   /** Write a line to kite-debug.log (only when running from source). */
   debugLog(msg: string): void;
+  /** Floating-video frame window: one of its buttons was clicked. */
+  pipFrameAction(action: 'back' | 'minimize' | 'close'): void;
+  /** Floating-video frame window: the mouse is over a button (take clicks) or not (let them through). */
+  pipFrameHover(over: boolean): void;
+  onPipFrameState(cb: (v: { compact: boolean }) => void): () => void;
+  /** Main window: show this tab (from the floating video's "Back to tab"). */
+  onFocusTab(cb: (tabId: string) => void): () => void;
   /** Tabs to pop a video out of the moment you switch to another app (best first). */
   setPipTargets(tabIds: string[]): void;
   /** The main process popped a video out (you left Kite) or put it back (you returned). */

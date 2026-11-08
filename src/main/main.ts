@@ -23,8 +23,10 @@ import { Storage } from './storage';
 import { findAction, toAccelerator } from '../shared/shortcuts';
 import { hostOf } from '../shared/url';
 import type { OpenRequest } from '../shared/ipc';
-import { floatPipWindowsSoon, installVideoPanelHooks } from './macWindows';
-import { MEDIA_PLAYING_SCRIPT, PIP_ENTER_SCRIPT, PIP_EXIT_SCRIPT, pipPopped } from '../shared/pip';
+import { attachToPipWindow, findPipWindow, floatPipWindowsSoon, installVideoPanelHooks, roundPipWindow, setPipWindowFrame } from './macWindows';
+import { createPipFrame } from './pipFrame';
+import { PIP_FRAME_ACTIONS, type PipFrameAction } from '../shared/pipFrame';
+import { MEDIA_PLAYING_SCRIPT, MEDIA_TRACKER_SCRIPT, PIP_CLOSE_SCRIPT, PIP_ENTER_SCRIPT, PIP_EXIT_SCRIPT, pipPopped } from '../shared/pip';
 
 const isMac = process.platform === 'darwin';
 const devUrl = process.env.KITE_DEV_URL;
@@ -121,6 +123,21 @@ function debugLog(msg: string) {
   }
 }
 
+/** Kite's frame (border + Back / Minimize / Close) around the floating video — macOS. */
+const pipFrame = createPipFrame({
+  log: (m) => debugLog(m),
+  url: () => rendererUrl('?mode=pip'),
+  webPreferences: () => ({ ...baseWebPreferences(), webviewTag: false }),
+  native: {
+    find: () => findPipWindow(debugLog),
+    setFrame: (addr, f) => setPipWindowFrame(debugLog, addr, f),
+    round: (addr, r) => roundPipWindow(debugLog, addr, r),
+    attach: (addr, w) => attachToPipWindow(debugLog, addr, w),
+  },
+});
+/** The page whose video is floating right now (however it got there). */
+let currentPip: { wcId: number; tabId: string; host: WebContents } | null = null;
+
 /** Tab ids the main window wants popped out on an app switch, best first. */
 let pipTargets: string[] = [];
 let pipTargetsHost: WebContents | null = null;
@@ -148,8 +165,14 @@ async function enterPip(wcId: number): Promise<string> {
       // `true` = run as if you clicked: browsers only allow pop-out after a user action.
       const st = await frame.executeJavaScript(PIP_ENTER_SCRIPT, true);
       if (pipPopped(st)) {
-        // macOS: keep the video on top of every app and desktop, even full-screen ones.
-        floatPipWindowsSoon(debugLog, 'popped out');
+        const page = pages.get(wcId);
+        if (page) currentPip = { wcId, tabId: page.tabId, host: page.host };
+        if (isMac) {
+          // Keep the video on top of every app and desktop, even full-screen ones,
+          // and put Kite's frame (border + buttons) around it.
+          floatPipWindowsSoon(debugLog, 'popped out');
+          pipFrame.showSoon();
+        }
         return String(st);
       }
       statuses.push(String(st));
@@ -161,6 +184,10 @@ async function enterPip(wcId: number): Promise<string> {
 }
 
 async function exitPip(wcId: number) {
+  if (currentPip?.wcId === wcId) {
+    currentPip = null;
+    pipFrame.hide('video returned');
+  }
   const wc = allWebContents.fromId(wcId);
   if (!wc || wc.isDestroyed()) return;
   for (const frame of wc.mainFrame.framesInSubtree) {
@@ -219,6 +246,42 @@ async function autoPipReturn(why: string) {
   debugLog(`return (${why}): tab ${left.tabId}`);
   if (!left.host.isDestroyed()) left.host.send('pip-state', { tabId: left.tabId, popped: false });
 }
+
+/** Back to tab / Minimize / Close on the floating video. */
+async function pipFrameAction(action: PipFrameAction) {
+  testHooks?.frameActions.push(action);
+  debugLog(`frame: ${action}`);
+  if (action === 'minimize') return pipFrame.toggleMinimize();
+  const pip = currentPip;
+  if (action === 'back') {
+    const win = ensureMainWindow();
+    win.show();
+    win.focus();
+    if (isMac) app.focus({ steal: true });
+    if (pip && !pip.host.isDestroyed()) pip.host.send('focus-tab', pip.tabId);
+    return;
+  }
+  // close: the video goes back into its tab, paused
+  pipFrame.hide('closed');
+  if (!pip) return;
+  currentPip = null;
+  if (pipLeft?.wcId === pip.wcId) pipLeft = null;
+  const wc = allWebContents.fromId(pip.wcId);
+  if (wc && !wc.isDestroyed()) {
+    for (const frame of wc.mainFrame.framesInSubtree) {
+      try {
+        if (await frame.executeJavaScript(PIP_CLOSE_SCRIPT, true)) break;
+      } catch {
+        /* frame went away */
+      }
+    }
+  }
+  if (!pip.host.isDestroyed()) pip.host.send('pip-state', { tabId: pip.tabId, popped: false });
+}
+
+/** Tests only: reach the frame window without a real floating video. */
+const testHooks = process.env.KITE_TEST ? { frameActions: [] as string[], pipFrame } : null;
+if (testHooks) (globalThis as Record<string, unknown>).__kiteTest = testHooks;
 
 // A page could try to open endless windows; allow a few per few seconds.
 let littleTimes: number[] = [];
@@ -519,6 +582,14 @@ function setupIpc() {
     return false;
   });
   on('debug:log', (_e, msg: string) => typeof msg === 'string' && debugLog(msg.slice(0, 500)));
+  // Buttons on Kite's frame around the floating video.
+  on('pip-frame:hover', (e, over: boolean) => {
+    if (pipFrame.isFrameWindow(BrowserWindow.fromWebContents(e.sender))) pipFrame.setHover(!!over);
+  });
+  on('pip-frame:action', (e, action: PipFrameAction) => {
+    if (!pipFrame.isFrameWindow(BrowserWindow.fromWebContents(e.sender)) || !PIP_FRAME_ACTIONS.includes(action)) return;
+    void pipFrameAction(action);
+  });
   // Which tabs to pop out if you switch apps — kept up to date by the main window.
   on('pip:targets', (e, tabIds: string[]) => {
     if (!mainWindow || e.sender !== mainWindow.webContents || !Array.isArray(tabIds)) return;
@@ -627,7 +698,14 @@ if (!gotLock) {
   });
 
   app.on('web-contents-created', (_e, contents) => {
-    if (contents.getType() === 'webview') hardenWebview(contents);
+    if (contents.getType() === 'webview') {
+      hardenWebview(contents);
+      // Remember when videos last played, so a video the system pauses as you
+      // switch apps can still pop out (see MEDIA_TRACKER_SCRIPT).
+      contents.on('media-started-playing', () => {
+        for (const frame of contents.mainFrame.framesInSubtree) frame.executeJavaScript(MEDIA_TRACKER_SCRIPT).catch(() => undefined);
+      });
+    }
     contents.on('will-attach-webview', (_ev, prefs, params) => {
       // Web pages never get Node or Kite's preload, and always use Kite's own session.
       delete prefs.preload;
@@ -657,6 +735,7 @@ if (!gotLock) {
     app.on('did-resign-active', () => {
       // A video the site popped out by itself (its own button) gets the same treatment.
       floatPipWindowsSoon(debugLog, 'app inactive');
+      if (isMac) pipFrame.showSoon(); // also frames a video the site popped out itself
       void autoPipOnLeave('app inactive');
     });
     app.on('did-become-active', () => debugLog('app active again'));

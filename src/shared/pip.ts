@@ -28,27 +28,61 @@ export function planOnSwitch(before: ID[], after: ID[], playing: Record<ID, bool
 }
 
 /**
+ * Runs in every frame of a page that may play video: remembers when each video
+ * last played, and whether a pause came from you (page in front) or from the
+ * system (page going to the background — Chrome pauses some background videos,
+ * e.g. muted ones, the moment you switch away). Safe to run more than once.
+ */
+export const MEDIA_TRACKER_SCRIPT = `(() => {
+  if (window.__kiteMediaTracker) return;
+  window.__kiteMediaTracker = true;
+  const isMedia = (t) => t && typeof t.paused === 'boolean' && typeof t.play === 'function';
+  document.addEventListener('timeupdate', (e) => { if (isMedia(e.target) && !e.target.paused) e.target.__kitePlayedAt = Date.now(); }, true);
+  document.addEventListener('play', (e) => { if (isMedia(e.target)) { e.target.__kiteUserPause = false; e.target.__kitePlayedAt = Date.now(); } }, true);
+  document.addEventListener('pause', (e) => {
+    if (isMedia(e.target)) e.target.__kiteUserPause = document.visibilityState === 'visible' && document.hasFocus();
+  }, true);
+})()`;
+
+/**
  * Script run inside a page (and each of its frames) to pop out its main video.
  * Picks the largest playing video that has sound or is reasonably big, so
- * small muted autoplay ads don't pop out.
- * Resolves to a short status: 'ok', 'already', or why nothing popped out
- * ('off', 'none', 'skipped …', 'error …') — written to the debug log.
+ * small muted autoplay ads don't pop out. A video the system paused a moment ago
+ * (because you were switching away) counts as playing, and is resumed.
+ * Resolves to a short status: 'ok', 'ok (resumed)', 'already', or why nothing
+ * popped out ('off', 'none', 'skipped …', 'error …') — written to the debug log.
  */
 export const PIP_ENTER_SCRIPT = `(async () => {
   if (!document.pictureInPictureEnabled) return 'off';
   if (document.pictureInPictureElement) return 'already';
   const all = Array.from(document.querySelectorAll('video'));
   if (!all.length) return 'none';
-  const vids = all.filter((v) =>
-    !v.paused && !v.ended && v.readyState >= 2 && v.videoWidth > 0 && !v.disablePictureInPicture &&
-    ((!v.muted && v.volume > 0) || v.clientWidth >= 480));
-  if (!vids.length) return 'skipped ' + all.map((v) => (v.paused ? 'paused' : 'playing') + '/' + v.readyState + '/' + v.clientWidth + (v.muted ? '/muted' : '')).join(',');
-  vids.sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight);
-  try { await vids[0].requestPictureInPicture(); return 'ok'; } catch (e) { return 'error ' + (e && e.name) + ': ' + (e && e.message); }
+  const usable = (v) => !v.ended && v.readyState >= 2 && v.videoWidth > 0 && !v.disablePictureInPicture &&
+    ((!v.muted && v.volume > 0) || v.clientWidth >= 480);
+  const justStopped = (v) => v.paused && v.__kiteUserPause !== true && Date.now() - (v.__kitePlayedAt || 0) < 2000;
+  const bySize = (a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight;
+  let vids = all.filter((v) => !v.paused && usable(v)).sort(bySize);
+  let resume = false;
+  if (!vids.length) { vids = all.filter((v) => justStopped(v) && usable(v)).sort(bySize); resume = vids.length > 0; }
+  if (!vids.length) return 'skipped ' + all.map((v) => (v.paused ? (v.__kiteUserPause ? 'paused-by-you' : 'paused') : 'playing') + '/' + v.readyState + '/' + v.clientWidth + (v.muted ? '/muted' : '')).join(',');
+  try {
+    await vids[0].requestPictureInPicture();
+    if (resume) { try { await vids[0].play(); } catch (e) {} return 'ok (resumed)'; }
+    return 'ok';
+  } catch (e) { return 'error ' + (e && e.name) + ': ' + (e && e.message); }
 })()`;
 
 /** True when a status from PIP_ENTER_SCRIPT means a video is floating. */
-export const pipPopped = (status: unknown) => status === 'ok' || status === 'already';
+export const pipPopped = (status: unknown) => typeof status === 'string' && (/^ok\b/.test(status) || status === 'already');
+
+/** Close button on the floating window: put the video back and pause it. */
+export const PIP_CLOSE_SCRIPT = `(async () => {
+  const v = document.pictureInPictureElement;
+  if (!v) return false;
+  try { await document.exitPictureInPicture(); } catch (e) {}
+  try { v.pause(); } catch (e) {}
+  return true;
+})()`;
 
 export const PIP_EXIT_SCRIPT = `(async () => {
   if (document.pictureInPictureElement) { try { await document.exitPictureInPicture(); } catch (e) {} return true; }

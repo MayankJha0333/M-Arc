@@ -38,6 +38,12 @@ export interface TestHooks {
   now: number | null;
   /** Simulate switching to another app (false) and back (true). */
   windowFocus(focused: boolean): void;
+  /** Floating-video frame: buttons clicked and hover changes, and pushing its state. */
+  pipFrameActions: string[];
+  pipFrameHover: boolean[];
+  pipFrameState(v: { compact: boolean }): void;
+  /** Simulate the floating video's "Back to tab". */
+  focusTab(tabId: string): void;
 }
 
 const STORAGE_KEY = 'kite-state';
@@ -50,6 +56,8 @@ function makeWebBridge(): KiteBridge {
   const littleToMain = new Emitter<{ url: string; spaceId: string | null }>();
   const littleArchived = new Emitter<{ url: string; title: string }>();
   const pipState = new Emitter<{ tabId: string; popped: boolean }>();
+  const pipFrameState = new Emitter<{ compact: boolean }>();
+  const focusTab = new Emitter<string>();
   // Mirrors the main process: on leaving the app, pop out the first target that has a playing video.
   let pipTargets: string[] = [];
   let pipLeft: string | null = null;
@@ -82,6 +90,10 @@ function makeWebBridge(): KiteBridge {
     arcFileText: null,
     now: null,
     windowFocus: (f) => void windowFocus(f),
+    pipFrameActions: [],
+    pipFrameHover: [],
+    pipFrameState: (v) => pipFrameState.emit(v),
+    focusTab: (id) => focusTab.emit(id),
   };
   window.__kiteTest = hooks;
   const platformName = /Mac/i.test(navigator.platform) ? 'darwin' : 'linux';
@@ -104,6 +116,10 @@ function makeWebBridge(): KiteBridge {
     pipExit: async () => undefined,
     mediaPlaying: async () => false,
     debugLog() {},
+    pipFrameAction: (a) => void hooks.pipFrameActions.push(a),
+    pipFrameHover: (over) => void hooks.pipFrameHover.push(over),
+    onPipFrameState: (cb) => pipFrameState.on(cb),
+    onFocusTab: (cb) => focusTab.on(cb),
     setPipTargets: (ids) => {
       pipTargets = [...ids];
     },
@@ -140,7 +156,8 @@ function makeWebBridge(): KiteBridge {
 export const isElectron = typeof window !== 'undefined' && !!window.kite;
 export const bridge: KiteBridge = window.kite ?? makeWebBridge();
 export const isMac = bridge.platform === 'darwin';
-export const mode: 'main' | 'little' = new URLSearchParams(location.search).get('mode') === 'little' ? 'little' : 'main';
+const modeParam = new URLSearchParams(location.search).get('mode');
+export const mode: 'main' | 'little' | 'pip' = modeParam === 'little' ? 'little' : modeParam === 'pip' ? 'pip' : 'main';
 
 /** Current time; tests can freeze/advance it. */
 export function now(): number {
