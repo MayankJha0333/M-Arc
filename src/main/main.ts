@@ -23,6 +23,7 @@ import { Storage } from './storage';
 import { findAction, toAccelerator } from '../shared/shortcuts';
 import { hostOf } from '../shared/url';
 import type { OpenRequest } from '../shared/ipc';
+import { floatPipWindowsSoon } from './macWindows';
 import { MEDIA_PLAYING_SCRIPT, PIP_ENTER_SCRIPT, PIP_EXIT_SCRIPT, pipPopped } from '../shared/pip';
 
 const isMac = process.platform === 'darwin';
@@ -146,7 +147,11 @@ async function enterPip(wcId: number): Promise<string> {
     try {
       // `true` = run as if you clicked: browsers only allow pop-out after a user action.
       const st = await frame.executeJavaScript(PIP_ENTER_SCRIPT, true);
-      if (pipPopped(st)) return String(st);
+      if (pipPopped(st)) {
+        // macOS: keep the video on top of every app and desktop, even full-screen ones.
+        floatPipWindowsSoon(debugLog, 'popped out');
+        return String(st);
+      }
       statuses.push(String(st));
     } catch (err) {
       statuses.push(`frame error ${(err as Error).message}`);
@@ -647,7 +652,11 @@ if (!gotLock) {
     mainWindow = createMainWindow();
     app.on('activate', () => ensureMainWindow());
     // macOS only (other systems never send these; tests send them by hand).
-    app.on('did-resign-active', () => void autoPipOnLeave('app inactive'));
+    app.on('did-resign-active', () => {
+      // A video the site popped out by itself (its own button) gets the same treatment.
+      floatPipWindowsSoon(debugLog, 'app inactive');
+      void autoPipOnLeave('app inactive');
+    });
     app.on('did-become-active', () => debugLog('app active again'));
   });
 

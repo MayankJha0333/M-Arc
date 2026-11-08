@@ -14,5 +14,15 @@ test('the packaged app starts and works', async () => {
   await expect(win.getByTestId('empty-state')).toBeVisible();
   const csp = await win.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
   expect(csp).toContain("script-src 'self'");
+  // The macOS window bridge (koffi) is shipped outside the archive and loads.
+  const koffi = await app.evaluate(() => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return typeof (process as any).mainModule.require('koffi').load;
+    } catch (e) {
+      return String(e);
+    }
+  });
+  expect(koffi).toBe('function');
   await app.close();
 });

@@ -22,10 +22,13 @@
     "dist:dir": "npm run build && electron-builder --dir",
     "icon": "node scripts/make-icon.mjs"
   },
-  "dependencies": {},
+  "dependencies": {
+    "koffi": "^2.16.3"
+  },
   "devDependencies": {
     "@fontsource/bricolage-grotesque": "^5.1.0",
     "@fontsource/figtree": "^5.1.1",
+    "@playwright/test": "^1.63.0",
     "@tiptap/extension-link": "^2.10.3",
     "@tiptap/extension-placeholder": "^2.10.3",
     "@tiptap/extension-task-item": "^2.10.3",
@@ -33,13 +36,6 @@
     "@tiptap/pm": "^2.10.3",
     "@tiptap/react": "^2.10.3",
     "@tiptap/starter-kit": "^2.10.3",
-    "immer": "^10.1.1",
-    "lucide-react": "^0.460.0",
-    "nanoid": "^5.0.9",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "zustand": "^4.5.5",
-    "@playwright/test": "^1.63.0",
     "@types/jsdom": "^21.1.7",
     "@types/node": "^22.10.1",
     "@types/react": "^18.3.12",
@@ -48,10 +44,16 @@
     "electron": "^38.8.6",
     "electron-builder": "^25.1.8",
     "esbuild": "^0.24.0",
+    "immer": "^10.1.1",
     "jsdom": "^25.0.1",
+    "lucide-react": "^0.460.0",
+    "nanoid": "^5.0.9",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "zustand": "^4.5.5"
   },
   "engines": {
     "node": ">=20"
@@ -66,7 +68,10 @@
     },
     "files": [
       "dist/**/*",
-      "package.json"
+      "package.json",
+      "!node_modules/koffi/{src,vendor,doc,lib}/**",
+      "!node_modules/koffi/build/koffi/{freebsd,openbsd,musl,win32}_*/**",
+      "!node_modules/koffi/build/koffi/linux_{arm64,armhf,ia32,loong64,riscv64d}/**"
     ],
     "asar": true,
     "mac": {
@@ -120,6 +125,10 @@
       "target": "dir",
       "icon": "build/icon.png",
       "category": "Network"
-    }
+    },
+    "asarUnpack": [
+      "node_modules/koffi/**"
+    ],
+    "npmRebuild": false
   }
 }
