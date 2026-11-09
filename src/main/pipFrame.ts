@@ -29,8 +29,6 @@ export interface PipFrameDeps {
   native: {
     find(): { addr: number; frame: Rect } | null;
     setFrame(addr: number, cocoaFrame: Rect, animate: boolean): void;
-    attach(addr: number, frameWindow: BrowserWindow): boolean;
-    detach(addr: number, frameWindow: BrowserWindow): void;
     /** Make the video window ignore the mouse (Kite's controls handle it all). */
     ignoreMouse(addr: number): void;
     /** Round the video window's corners if that's safe; true if it did. */
@@ -57,8 +55,6 @@ export function createPipFrame(deps: PipFrameDeps) {
   /** Did the video window get rounded corners (then the shade is curved to match)? */
   let rounded = false;
   let last: PipFrameState | null = null;
-  /** Pinned to the video window natively (moves with it); otherwise moved by hand. */
-  let pinned = false;
 
   const mainScreenHeight = () => screen.getPrimaryDisplay().bounds.height;
 
@@ -83,7 +79,10 @@ export function createPipFrame(deps: PipFrameDeps) {
       title: 'Kite video controls',
       webPreferences: deps.webPreferences(),
     });
-    win.setAlwaysOnTop(true, 'floating');
+    // One level above the video window, so the controls always stay on top of it.
+    // (Not pinned to it as a child window: moving the video from JavaScript would then
+    // make macOS move this Electron window mid-call and re-enter JavaScript — a crash.)
+    win.setAlwaysOnTop(true, 'floating', 1);
     win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
     win.webContents.on('will-navigate', (e) => e.preventDefault());
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -153,12 +152,11 @@ export function createPipFrame(deps: PipFrameDeps) {
       pipAddr = addr;
       pipBounds = outer;
       mode = 'full';
-      pinned = deps.native.step('pin to the video', () => deps.native.attach(addr, w), false);
       deps.native.step('video window ignores the mouse', () => deps.native.ignoreMouse(addr), undefined);
       rounded = deps.native.step('round the video window', () => deps.native.round(addr, VIDEO_RADIUS), false);
       if (thumbTimer) clearInterval(thumbTimer);
       thumbTimer = null;
-      deps.log(`frame: controls shown over the video (${outer.width}×${outer.height}${pinned ? ', pinned' : ''})`);
+      deps.log(`frame: controls shown over the video (${outer.width}×${outer.height})`);
       if (last) send({ ...last, mode: 'full', rounded });
       startTimers();
     } else if (!same(outer, pipBounds)) {
@@ -205,8 +203,6 @@ export function createPipFrame(deps: PipFrameDeps) {
     const w = win;
     if (!w || w.isDestroyed() || mode === 'hidden') return;
     endDrag();
-    if (pipAddr && pinned) deps.native.detach(pipAddr, w);
-    pinned = false;
     const near = pipBounds ?? w.getBounds();
     const bounds = miniBounds(screen.getDisplayMatching(near).workArea);
     pipAddr = 0;
@@ -222,7 +218,7 @@ export function createPipFrame(deps: PipFrameDeps) {
   }
 
   /**
-   * Drag on the video: move the video window (the controls are pinned to it and follow).
+   * Drag on the video: move the video window, and the controls with it.
    * Drag an edge or corner: resize it, keeping its shape.
    */
   function startDrag(kind: 'move' | ResizeEdge = 'move') {
@@ -242,9 +238,10 @@ export function createPipFrame(deps: PipFrameDeps) {
         const next = drag.kind === 'move' ? dragTo(drag.start, drag.from, at) : resizeTo(drag.start, drag.kind, drag.from, at, maxWidth);
         if (same(next, pipBounds)) return;
         pipBounds = next;
+        // The video window is Chromium's (moved through macOS); the controls are Kite's own
+        // Electron window (moved through Electron) — never one through the other.
         deps.native.setFrame(addr, toCocoa(next, mainScreenHeight()), false);
-        // A pinned window moves with the video by itself, but doesn't change size with it.
-        if (!pinned || drag.kind !== 'move') win?.setBounds(next);
+        win?.setBounds(next);
       }, 16),
     };
   }
