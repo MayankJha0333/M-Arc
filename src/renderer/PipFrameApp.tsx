@@ -109,6 +109,7 @@ export function PipFrameApp() {
       data-testid="pip-frame"
       data-mode="full"
       data-shown={shown || undefined}
+      data-rounded={st.rounded || undefined}
       onMouseMove={wake}
       onMouseLeave={() => setAwake(false)}
       onPointerDown={(e) => {
@@ -120,7 +121,8 @@ export function PipFrameApp() {
       onPointerCancel={endDrag}
       onLostPointerCapture={endDrag}
     >
-      <div className="pipd-shade" />
+      {/* A curved shade only when the video window itself has rounded corners to match. */}
+      {st.rounded && <div className="pipd-shade" />}
 
       <div className="pipd-corner">
         <button className="pipd-round pipd-close" data-testid="pip-frame-close" aria-label="Close" title="Close" onClick={() => bridge.pipFrameAction('close')}>

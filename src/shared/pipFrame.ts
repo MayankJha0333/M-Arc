@@ -66,6 +66,9 @@ export function dragTo(start: Rect, from: { x: number; y: number }, to: { x: num
   return { ...start, x: Math.round(start.x + to.x - from.x), y: Math.round(start.y + to.y - from.y) };
 }
 
+/** Corner radius of the floating video (when its window can be rounded). */
+export const VIDEO_RADIUS = 10;
+
 export type PipFrameMode = 'full' | 'mini';
 export type PipFrameAction = 'back' | 'minimize' | 'show' | 'close';
 export const PIP_FRAME_ACTIONS: readonly PipFrameAction[] = ['back', 'minimize', 'show', 'close'];
@@ -81,4 +84,6 @@ export interface PipFrameState {
   host: string;
   /** Mini player: a small snapshot of the video (JPEG data URL). */
   thumb?: string;
+  /** The video window has rounded corners, so a matching curved shade can be drawn. */
+  rounded?: boolean;
 }

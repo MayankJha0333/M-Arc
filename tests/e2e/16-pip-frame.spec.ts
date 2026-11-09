@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect, openApp, newTab } from './fixtures';
 
 // Kite's floating video controls — design D — in their own see-through window.
-const state = (page: Page, s: Partial<{ mode: 'full' | 'mini'; t: number; d: number; paused: boolean; title: string; host: string; thumb: string }>) =>
+const state = (page: Page, s: Partial<{ mode: 'full' | 'mini'; t: number; d: number; paused: boolean; title: string; host: string; thumb: string; rounded: boolean }>) =>
   page.evaluate((v) => window.__kiteTest!.pipFrameState({ mode: 'full', t: 252, d: 660, paused: false, title: 'A video', host: 'youtube.com', ...v }), s);
 const hooks = (page: Page) => page.evaluate(() => ({ actions: window.__kiteTest!.pipFrameActions, media: window.__kiteTest!.pipFrameMedia, drags: window.__kiteTest!.pipFrameDrags }));
 
@@ -134,6 +134,21 @@ test.describe('floating video controls (design D)', () => {
     const thumb = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/yQALCAABAAEBAREA/8wABgAQEAX/2gAIAQEAAD8A0s8g/9k=';
     await state(page, { mode: 'mini', thumb });
     await expect(page.locator('.pipm-thumb img')).toHaveAttribute('src', thumb);
+  });
+
+  test('square video window: no shade (no bright corners); the time and slider sit in a small rounded bar', async ({ page }) => {
+    await page.mouse.move(100, 100);
+    await expect(page.locator('.pipd-shade')).toHaveCount(0);
+    await expect(page.locator('.pipd-bottom')).toHaveCSS('border-radius', '9px');
+    await expect(page.locator('.pipd-bottom')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  });
+
+  test('rounded video window: a curved shade that matches its corners', async ({ page }) => {
+    await state(page, { rounded: true });
+    await page.mouse.move(100, 100);
+    await expect(page.locator('.pipd-shade')).toHaveCSS('border-radius', '10px');
+    await expect(page.getByTestId('pip-frame')).toHaveCSS('border-radius', '10px');
+    await expect(page.locator('.pipd-bottom')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   });
 
   test('the page is see-through', async ({ page }) => {

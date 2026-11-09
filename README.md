@@ -88,7 +88,7 @@ browser profiles, extensions.
 
 ```bash
 npm test               # 216 logic tests (Vitest)
-npm run test:e2e       # 151 UI tests (Playwright, simulated pages)
+npm run test:e2e       # 153 UI tests (Playwright, simulated pages)
 npm run test:electron  # 23 tests in real Electron, incl. 5 security attack tests and a real playing video
 npm run test:all       # everything + type check
 ```

@@ -359,6 +359,36 @@ export function frameStep<T>(log: Log, step: string, fn: () => T, fallback: T): 
   }
 }
 
+/**
+ * Round the video window's corners — only when it is already see-through. Making it
+ * see-through ourselves crashed macOS once it counts as a panel, so an opaque window
+ * is left square (its corners would show the window's light background otherwise).
+ */
+export function roundPipWindowIfSafe(log: Log, addr: number, radius: number): boolean {
+  const o = load(log);
+  if (!o) return false;
+  try {
+    if (o.sendBool(addr, o.sel('isOpaque'))) {
+      log('frame: video window is opaque — corners left square, no shade');
+      return false;
+    }
+    const view = o.send(addr, o.sel('contentView'));
+    const layer = view ? o.send(view, o.sel('layer')) : 0;
+    if (!layer) {
+      log('frame: video window has no layer — corners left square, no shade');
+      return false;
+    }
+    o.setDouble(layer, o.sel('setCornerRadius:'), radius);
+    o.setBool(layer, o.sel('setMasksToBounds:'), true);
+    o.call(addr, o.sel('invalidateShadow'));
+    log(`frame: video window corners rounded (${radius}px)`);
+    return true;
+  } catch (err) {
+    log(`frame: could not round the video window: ${(err as Error).message}`);
+    return false;
+  }
+}
+
 /** Chromium's video window stops taking the mouse: Kite's controls on top handle it all. */
 export function ignoreMouseOnPipWindow(log: Log, addr: number) {
   const o = load(log);

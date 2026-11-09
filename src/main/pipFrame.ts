@@ -9,7 +9,7 @@
 // The video window itself is found and moved through macWindows.ts (macOS only).
 
 import { BrowserWindow, screen } from 'electron';
-import { dragTo, fromCocoa, miniBounds, resizeTo, toCocoa, type PipFrameMode, type PipFrameState, type Rect, type ResizeEdge } from '../shared/pipFrame';
+import { dragTo, fromCocoa, miniBounds, resizeTo, toCocoa, VIDEO_RADIUS, type PipFrameMode, type PipFrameState, type Rect, type ResizeEdge } from '../shared/pipFrame';
 
 export interface PipMediaInfo {
   t: number;
@@ -33,6 +33,8 @@ export interface PipFrameDeps {
     detach(addr: number, frameWindow: BrowserWindow): void;
     /** Make the video window ignore the mouse (Kite's controls handle it all). */
     ignoreMouse(addr: number): void;
+    /** Round the video window's corners if that's safe; true if it did. */
+    round(addr: number, radius: number): boolean;
     /** Run a risky step under the crash safety net (logged; skipped if it crashed last time). */
     step<T>(name: string, fn: () => T, fallback: T): T;
   };
@@ -52,6 +54,8 @@ export function createPipFrame(deps: PipFrameDeps) {
   let drag: { kind: 'move' | ResizeEdge; from: { x: number; y: number }; start: Rect; timer: ReturnType<typeof setInterval>; stopAt: number } | null = null;
   let thumbTimer: ReturnType<typeof setInterval> | null = null;
   let thumb: string | undefined;
+  /** Did the video window get rounded corners (then the shade is curved to match)? */
+  let rounded = false;
   let last: PipFrameState | null = null;
   /** Pinned to the video window natively (moves with it); otherwise moved by hand. */
   let pinned = false;
@@ -104,7 +108,7 @@ export function createPipFrame(deps: PipFrameDeps) {
       return;
     }
     missing = 0;
-    send({ mode: mode === 'mini' ? 'mini' : 'full', t: m.t, d: m.d, paused: m.paused, title: m.title, host: m.host, thumb });
+    send({ mode: mode === 'mini' ? 'mini' : 'full', t: m.t, d: m.d, paused: m.paused, title: m.title, host: m.host, thumb, rounded });
   }
 
   async function pollThumb() {
@@ -151,10 +155,11 @@ export function createPipFrame(deps: PipFrameDeps) {
       mode = 'full';
       pinned = deps.native.step('pin to the video', () => deps.native.attach(addr, w), false);
       deps.native.step('video window ignores the mouse', () => deps.native.ignoreMouse(addr), undefined);
+      rounded = deps.native.step('round the video window', () => deps.native.round(addr, VIDEO_RADIUS), false);
       if (thumbTimer) clearInterval(thumbTimer);
       thumbTimer = null;
       deps.log(`frame: controls shown over the video (${outer.width}×${outer.height}${pinned ? ', pinned' : ''})`);
-      if (last) send({ ...last, mode: 'full' });
+      if (last) send({ ...last, mode: 'full', rounded });
       startTimers();
     } else if (!same(outer, pipBounds)) {
       pipBounds = outer;
