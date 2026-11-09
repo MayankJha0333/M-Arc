@@ -19,34 +19,43 @@ export function toCocoa(bounds: Rect, mainScreenHeight: number): Rect {
   return { x: bounds.x, y: mainScreenHeight - bounds.y - bounds.height, width: bounds.width, height: bounds.height };
 }
 
-export const COMPACT_WIDTH = 240;
-export const COMPACT_MIN_HEIGHT = 135;
-const MARGIN = 16;
+/** The frame sits this far inside the video window, so its edges stay grabbable for resizing. */
+export const FRAME_INSET = 5;
 
-/**
- * "Minimize": shrink the video (keeping its shape) and tuck it into the screen
- * corner nearest to where it is now. `workArea` is the screen minus menu bar/Dock.
- */
-export function compactBounds(current: Rect, workArea: Rect): Rect {
-  const ratio = current.height / Math.max(1, current.width);
-  const width = Math.min(COMPACT_WIDTH, current.width);
-  const height = Math.max(Math.min(COMPACT_MIN_HEIGHT, current.height), Math.round(width * ratio));
-  const cx = current.x + current.width / 2;
-  const cy = current.y + current.height / 2;
-  const right = cx >= workArea.x + workArea.width / 2;
-  const bottom = cy >= workArea.y + workArea.height / 2;
+export function insetBounds(b: Rect, by = FRAME_INSET): Rect {
+  return { x: b.x + by, y: b.y + by, width: Math.max(0, b.width - by * 2), height: Math.max(0, b.height - by * 2) };
+}
+
+/** Size of the mini player's window (the card plus room for its shadow). */
+export const MINI_SIZE = { width: 360, height: 104 } as const;
+const MARGIN = 12;
+
+/** Mini player: bottom-right corner of the screen the video was on. */
+export function miniBounds(workArea: Rect): Rect {
   return {
-    x: right ? workArea.x + workArea.width - width - MARGIN : workArea.x + MARGIN,
-    y: bottom ? workArea.y + workArea.height - height - MARGIN : workArea.y + MARGIN,
-    width,
-    height,
+    x: workArea.x + workArea.width - MINI_SIZE.width - MARGIN,
+    y: workArea.y + workArea.height - MINI_SIZE.height - MARGIN,
+    width: MINI_SIZE.width,
+    height: MINI_SIZE.height,
   };
 }
 
-/** Is the window already at (about) its minimized size? */
-export function isCompact(current: Rect): boolean {
-  return current.width <= COMPACT_WIDTH + 2;
+/** Where a dragged window goes: its start position moved by how far the mouse moved. */
+export function dragTo(start: Rect, from: { x: number; y: number }, to: { x: number; y: number }): Rect {
+  return { ...start, x: Math.round(start.x + to.x - from.x), y: Math.round(start.y + to.y - from.y) };
 }
 
-export type PipFrameAction = 'back' | 'minimize' | 'close';
-export const PIP_FRAME_ACTIONS: readonly PipFrameAction[] = ['back', 'minimize', 'close'];
+export type PipFrameMode = 'full' | 'mini';
+export type PipFrameAction = 'back' | 'minimize' | 'show' | 'close';
+export const PIP_FRAME_ACTIONS: readonly PipFrameAction[] = ['back', 'minimize', 'show', 'close'];
+
+/** What the frame shows: where the video is, and which layout. */
+export interface PipFrameState {
+  mode: PipFrameMode;
+  t: number;
+  /** 0 = live or unknown length (no slider). */
+  d: number;
+  paused: boolean;
+  title: string;
+  host: string;
+}

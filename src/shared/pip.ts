@@ -72,6 +72,7 @@ export const PIP_ENTER_SCRIPT = `(async () => {
   if (!vids.length) return 'skipped ' + all.map((v) => (v.paused ? (v.__kiteUserPause ? 'paused-by-you' : 'paused') : 'playing') + '/' + v.readyState + '/' + v.clientWidth + (v.muted ? '/muted' : '')).join(',');
   try {
     await vids[0].requestPictureInPicture();
+    window.__kitePipVideo = vids[0]; // remembered for the floating controls and the mini player
     if (resume) { try { await vids[0].play(); } catch (e) {} return 'ok (resumed)'; }
     return 'ok';
   } catch (e) { return 'error ' + (e && e.name) + ': ' + (e && e.message); }
@@ -80,11 +81,11 @@ export const PIP_ENTER_SCRIPT = `(async () => {
 /** True when a status from PIP_ENTER_SCRIPT means a video is floating. */
 export const pipPopped = (status: unknown) => typeof status === 'string' && (/^ok\b/.test(status) || status === 'already');
 
-/** Close button on the floating window: put the video back and pause it. */
+/** Close on the floating video (or the mini player): put the video back and pause it. */
 export const PIP_CLOSE_SCRIPT = `(async () => {
-  const v = document.pictureInPictureElement;
+  const v = document.pictureInPictureElement || (window.__kitePipVideo && window.__kitePipVideo.isConnected ? window.__kitePipVideo : null);
   if (!v) return false;
-  try { await document.exitPictureInPicture(); } catch (e) {}
+  if (document.pictureInPictureElement) { try { await document.exitPictureInPicture(); } catch (e) {} }
   try { v.pause(); } catch (e) {}
   return true;
 })()`;
@@ -106,3 +107,69 @@ export function appSwitchTargets(visible: ID[], s: PipSettings, focused?: ID | n
 
 /** Is any video or audio on this page (frame) still playing? Pages often have several. */
 export const MEDIA_PLAYING_SCRIPT = `Array.from(document.querySelectorAll('video, audio')).some((m) => !m.paused && !m.ended)`;
+
+// ---- Kite's floating video controls (design D) -----------------------------------
+
+/** The video Kite popped out (or last popped out, while it's in the mini player). */
+const PIP_VIDEO = `(document.pictureInPictureElement || (window.__kitePipVideo && window.__kitePipVideo.isConnected ? window.__kitePipVideo : null))`;
+
+/** Where the floating video is: time, length, paused. null if this frame has none. */
+export const MEDIA_STATE_SCRIPT = `(() => {
+  const v = ${PIP_VIDEO};
+  if (!v) return null;
+  return { t: v.currentTime || 0, d: Number.isFinite(v.duration) ? v.duration : 0, paused: !!v.paused, pip: document.pictureInPictureElement === v };
+})()`;
+
+export type PipMediaCommand = { cmd: 'toggle' } | { cmd: 'play' } | { cmd: 'pause' } | { cmd: 'seek'; t: number } | { cmd: 'skip'; by: number };
+
+/** Is this a well-formed command (it comes from another window, so check it)? */
+export function isPipMediaCommand(c: unknown): c is PipMediaCommand {
+  if (!c || typeof c !== 'object') return false;
+  const o = c as Record<string, unknown>;
+  if (o.cmd === 'toggle' || o.cmd === 'play' || o.cmd === 'pause') return true;
+  if (o.cmd === 'seek') return typeof o.t === 'number' && Number.isFinite(o.t) && o.t >= 0;
+  if (o.cmd === 'skip') return typeof o.by === 'number' && Number.isFinite(o.by) && Math.abs(o.by) <= 600;
+  return false;
+}
+
+/** Script that applies a command to the floating video. Resolves true if this frame had it. */
+export function pipMediaScript(c: PipMediaCommand): string {
+  const body =
+    c.cmd === 'toggle'
+      ? `if (v.paused) { await v.play(); } else { v.pause(); }`
+      : c.cmd === 'play'
+        ? `await v.play();`
+        : c.cmd === 'pause'
+          ? `v.pause();`
+          : c.cmd === 'seek'
+            ? `v.currentTime = Math.min(${Number(c.t)}, Number.isFinite(v.duration) ? v.duration : ${Number(c.t)});`
+            : `v.currentTime = Math.max(0, Math.min((v.currentTime || 0) + (${Number(c.by)}), Number.isFinite(v.duration) ? v.duration : Infinity));`;
+  return `(async () => { const v = ${PIP_VIDEO}; if (!v) return false; try { ${body} } catch (e) {} return true; })()`;
+}
+
+/** Mini player → "Show video": pop the same video out again (even if paused). */
+export const PIP_REENTER_SCRIPT = `(async () => {
+  const v = ${PIP_VIDEO};
+  if (!v) return 'none';
+  if (document.pictureInPictureElement === v) return 'already';
+  try { await v.requestPictureInPicture(); return 'ok'; } catch (e) { return 'error ' + (e && e.message); }
+})()`;
+
+/** Minimize → mini player: leave the floating window but keep playing in the tab. */
+export const PIP_TO_MINI_SCRIPT = `(async () => {
+  const v = ${PIP_VIDEO};
+  if (!v) return false;
+  const wasPlaying = !v.paused;
+  if (document.pictureInPictureElement) { try { await document.exitPictureInPicture(); } catch (e) {} }
+  if (wasPlaying && v.paused) { try { await v.play(); } catch (e) {} }
+  return true;
+})()`;
+
+/** "1:05", "1:02:03". */
+export function formatTime(sec: number): string {
+  const s = Math.max(0, Math.floor(Number.isFinite(sec) ? sec : 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const r = String(s % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${r}` : `${m}:${r}`;
+}

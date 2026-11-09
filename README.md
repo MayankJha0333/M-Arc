@@ -50,7 +50,7 @@ cookies or history.
 | **Little window** | Small quick window (⌘⌥N, works even when Kite is in the background); “Open in Kite” moves the page into a Space |
 | **Boosts** | Per-site CSS, font, zap (click to hide anything), optional script; live while you type; import/export |
 | **Link routing** | Rules for links from other apps: site → Space or little window; try-a-link preview |
-| **Video pop-out** | Switch tabs or apps while a video plays and it floats in a window you can drag and resize anywhere — on top of every app, even full-screen ones; come back and it returns to the page. Rounded border with Back to tab, Minimize (tucks it into a corner) and Close. Speaker icon on playing tabs (click to mute); ⌘⇧P by hand; switches in Settings |
+| **Video pop-out** | Switch tabs or apps while a video plays and it floats in a window you can drag and resize anywhere — on top of every app, even full-screen ones; come back and it returns to the page. Its controls: Close and Minimize top-left, Back to tab, play/pause, ±10 s and a seek slider you can drag back; drag the video to move it. Minimize turns it into a mini player (sound keeps playing) with its own slider. Speaker icon on playing tabs (click to mute); ⌘⇧P by hand; switches in Settings |
 | **Notes** | Rich text in the sidebar: headings, lists, to-dos, quotes, code, links; Markdown export |
 | **Customise** | Sidebar side, spacing, 4 fonts, text size, sidebar width, corners, page margin, favorites per row, reduce motion, your own CSS for Kite, every shortcut re-recordable |
 | **Your data** | One JSON file, saved safely (flushed, atomic, last-save backup + 7 daily copies); back up / restore |
@@ -87,8 +87,8 @@ browser profiles, extensions.
 ## Tests
 
 ```bash
-npm test               # 208 logic tests (Vitest)
-npm run test:e2e       # 144 UI tests (Playwright, simulated pages)
+npm test               # 213 logic tests (Vitest)
+npm run test:e2e       # 149 UI tests (Playwright, simulated pages)
 npm run test:electron  # 23 tests in real Electron, incl. 5 security attack tests and a real playing video
 npm run test:all       # everything + type check
 ```

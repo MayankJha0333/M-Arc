@@ -23,9 +23,10 @@ import { Storage } from './storage';
 import { findAction, toAccelerator } from '../shared/shortcuts';
 import { hostOf } from '../shared/url';
 import type { OpenRequest } from '../shared/ipc';
-import { attachToPipWindow, findPipWindow, floatPipWindowsSoon, frameStep, installVideoPanelHooks, setPipWindowFrame } from './macWindows';
+import { attachToPipWindow, detachFromPipWindow, findPipWindow, floatPipWindowsSoon, frameStep, installVideoPanelHooks, setPipWindowFrame } from './macWindows';
 import { createPipFrame } from './pipFrame';
 import { PIP_FRAME_ACTIONS, type PipFrameAction } from '../shared/pipFrame';
+import { isPipMediaCommand, MEDIA_STATE_SCRIPT, pipMediaScript, PIP_REENTER_SCRIPT, PIP_TO_MINI_SCRIPT } from '../shared/pip';
 import { MEDIA_PLAYING_SCRIPT, MEDIA_TRACKER_SCRIPT, PIP_CLOSE_SCRIPT, PIP_ENTER_SCRIPT, PIP_EXIT_SCRIPT, pipPopped } from '../shared/pip';
 
 const isMac = process.platform === 'darwin';
@@ -123,16 +124,32 @@ function debugLog(msg: string) {
   }
 }
 
-/** Kite's frame (border + Back / Minimize / Close) around the floating video — macOS. */
+/** Kite's controls over the floating video, and its mini player (design D) — macOS. */
 const pipFrame = createPipFrame({
   log: (m) => debugLog(m),
   url: () => rendererUrl('?mode=pip'),
   webPreferences: () => ({ ...baseWebPreferences(), webviewTag: false }),
+  media: async () => {
+    const pip = currentPip;
+    if (!pip) return null;
+    const wc = allWebContents.fromId(pip.wcId);
+    if (!wc || wc.isDestroyed()) return null;
+    const m = (await runInPipPage(MEDIA_STATE_SCRIPT, false)) as { t: number; d: number; paused: boolean; pip: boolean } | null;
+    if (!m) return null;
+    let host = '';
+    try {
+      host = new URL(wc.getURL()).hostname.replace(/^www\./, '');
+    } catch {
+      /* not a web page */
+    }
+    return { ...m, title: wc.getTitle(), host };
+  },
   native: {
     find: () => findPipWindow(debugLog),
-    setFrame: (addr, f) => setPipWindowFrame(debugLog, addr, f),
+    setFrame: (addr, f, animate) => setPipWindowFrame(debugLog, addr, f, animate),
     step: (name, fn, fallback) => frameStep(debugLog, name, fn, fallback),
     attach: (addr, w) => attachToPipWindow(debugLog, addr, w),
+    detach: (addr, w) => detachFromPipWindow(debugLog, addr, w),
   },
 });
 /** The page whose video is floating right now (however it got there). */
@@ -247,11 +264,26 @@ async function autoPipReturn(why: string) {
   if (!left.host.isDestroyed()) left.host.send('pip-state', { tabId: left.tabId, popped: false });
 }
 
-/** Back to tab / Minimize / Close on the floating video. */
+/** Run a script in each frame of the floating video's page; the first frame that has the video answers. */
+async function runInPipPage(script: string, userGesture: boolean): Promise<unknown> {
+  const pip = currentPip;
+  const wc = pip ? allWebContents.fromId(pip.wcId) : null;
+  if (!wc || wc.isDestroyed()) return null;
+  for (const frame of wc.mainFrame.framesInSubtree) {
+    try {
+      const r = await frame.executeJavaScript(script, userGesture);
+      if (r !== null && r !== false && r !== undefined && r !== 'none') return r;
+    } catch {
+      /* frame went away */
+    }
+  }
+  return null;
+}
+
+/** Back to tab / Minimize / Show video / Close on the floating video and mini player. */
 async function pipFrameAction(action: PipFrameAction) {
   testHooks?.frameActions.push(action);
   debugLog(`frame: ${action}`);
-  if (action === 'minimize') return pipFrame.toggleMinimize();
   const pip = currentPip;
   if (action === 'back') {
     const win = ensureMainWindow();
@@ -261,21 +293,24 @@ async function pipFrameAction(action: PipFrameAction) {
     if (pip && !pip.host.isDestroyed()) pip.host.send('focus-tab', pip.tabId);
     return;
   }
+  if (action === 'minimize') {
+    // The video leaves its floating window but keeps playing in its tab; the controls become the mini player.
+    await runInPipPage(PIP_TO_MINI_SCRIPT, true);
+    pipFrame.toMini();
+    return;
+  }
+  if (action === 'show') {
+    const st = await runInPipPage(PIP_REENTER_SCRIPT, true);
+    debugLog(`frame: show video → ${String(st)}`);
+    if (isMac) pipFrame.showSoon();
+    return;
+  }
   // close: the video goes back into its tab, paused
   pipFrame.hide('closed');
   if (!pip) return;
+  await runInPipPage(PIP_CLOSE_SCRIPT, true);
   currentPip = null;
   if (pipLeft?.wcId === pip.wcId) pipLeft = null;
-  const wc = allWebContents.fromId(pip.wcId);
-  if (wc && !wc.isDestroyed()) {
-    for (const frame of wc.mainFrame.framesInSubtree) {
-      try {
-        if (await frame.executeJavaScript(PIP_CLOSE_SCRIPT, true)) break;
-      } catch {
-        /* frame went away */
-      }
-    }
-  }
   if (!pip.host.isDestroyed()) pip.host.send('pip-state', { tabId: pip.tabId, popped: false });
 }
 
@@ -583,8 +618,16 @@ function setupIpc() {
   });
   on('debug:log', (_e, msg: string) => typeof msg === 'string' && debugLog(msg.slice(0, 500)));
   // Buttons on Kite's frame around the floating video.
-  on('pip-frame:hover', (e, over: boolean) => {
-    if (pipFrame.isFrameWindow(BrowserWindow.fromWebContents(e.sender))) pipFrame.setHover(!!over);
+  // Play/pause, seek (drag the slider), skip 10 seconds.
+  on('pip-frame:media', (e, cmd: unknown) => {
+    if (!pipFrame.isFrameWindow(BrowserWindow.fromWebContents(e.sender)) || !isPipMediaCommand(cmd)) return;
+    void runInPipPage(pipMediaScript(cmd), true).then(() => pipFrame.refresh());
+  });
+  // Drag on the video: move the floating window.
+  on('pip-frame:drag', (e, phase: unknown) => {
+    if (!pipFrame.isFrameWindow(BrowserWindow.fromWebContents(e.sender))) return;
+    if (phase === 'start') pipFrame.startDrag();
+    else pipFrame.endDrag();
   });
   on('pip-frame:action', (e, action: PipFrameAction) => {
     if (!pipFrame.isFrameWindow(BrowserWindow.fromWebContents(e.sender)) || !PIP_FRAME_ACTIONS.includes(action)) return;

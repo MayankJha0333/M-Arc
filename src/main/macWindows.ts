@@ -58,6 +58,7 @@ function crashGuard(name: string, what: string) {
   const file = () => join(app.getPath('userData'), name);
   let disabled: boolean | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let quitHooked = false;
   const clear = () => {
     if (timer) clearTimeout(timer);
     timer = null;
@@ -86,12 +87,15 @@ function crashGuard(name: string, what: string) {
     },
     /** About to do the risky step: leave a marker that's cleared if Kite survives it. */
     arm() {
-      try {
-        writeFileSync(file(), buildId());
-      } catch {
-        /* ignore */
+      if (!timer) {
+        try {
+          writeFileSync(file(), buildId());
+        } catch {
+          /* ignore */
+        }
       }
-      if (!timer) app.once('will-quit', clear); // a normal quit is not a crash
+      if (!quitHooked) app.once('will-quit', clear); // a normal quit is not a crash
+      quitHooked = true;
       if (timer) clearTimeout(timer);
       // Survived the change and half a minute of macOS using it (switching apps etc.).
       timer = setTimeout(clear, 30_000);
@@ -325,13 +329,12 @@ export function findPipWindow(log: Log): { addr: number; frame: Rect } | null {
   }
 }
 
-export function setPipWindowFrame(log: Log, addr: number, cocoaFrame: Rect) {
+export function setPipWindowFrame(log: Log, addr: number, cocoaFrame: Rect, animate: boolean) {
   const o = load(log);
   if (!o) return;
   try {
-    log('frame: resizing the video window…');
     frameGuard.arm();
-    o.setFrame(addr, cocoaFrame, true);
+    o.setFrame(addr, cocoaFrame, animate);
   } catch (err) {
     log(`frame: could not resize the video window: ${(err as Error).message}`);
   }
@@ -353,6 +356,18 @@ export function frameStep<T>(log: Log, step: string, fn: () => T, fallback: T): 
   } catch (err) {
     log(`frame: ${step} failed: ${(err as Error).message}`);
     return fallback;
+  }
+}
+
+/** Unpin Kite's controls from the video window (before the video window closes). */
+export function detachFromPipWindow(log: Log, addr: number, frameWindow: BrowserWindow) {
+  const o = load(log);
+  if (!o) return;
+  try {
+    const child = nsWindowOf(o, frameWindow);
+    if (child) o.setUInt(addr, o.sel('removeChildWindow:'), child);
+  } catch (err) {
+    log(`frame: could not unpin from the video: ${(err as Error).message}`);
   }
 }
 

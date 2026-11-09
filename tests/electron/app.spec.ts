@@ -393,7 +393,7 @@ test('video pop-out: a video you paused yourself does not pop out when you switc
   await app.close();
 });
 
-test('floating video frame: Back to tab, Minimize and Close work in the real app', async () => {
+test('floating video controls (design D): play/pause, minimize to the mini player, show video, back to tab, close', async () => {
   const { app, win } = await launch();
   await open(win, site.url('/video'));
   await expect(win.locator('[data-title="Video Page"] [data-testid^="sound-"]')).toBeVisible({ timeout: 15000 });
@@ -402,43 +402,72 @@ test('floating video frame: Back to tab, Minimize and Close work in the real app
       const wc = webContents.getAllWebContents().find((w) => w.getType() === 'webview' && w.getURL().includes('/video'));
       return wc ? wc.executeJavaScript(code) : null;
     }, js);
+  const inPip = () => video('!!document.pictureInPictureElement');
+  const paused = () => video("document.getElementById('v').paused");
+  const frameWin = (fn: string) =>
+    app.evaluate(({ BrowserWindow }, f) => {
+      const w = BrowserWindow.getAllWindows().find((x) => x.webContents.getURL().includes('mode=pip'))!;
+      return f === 'bounds' ? w.getBounds() : f === 'visible' ? w.isVisible() : w.isFocusable();
+    }, fn);
+
   // Pop it out by switching tabs.
   await open(win, site.url('/two'));
-  await expect.poll(() => video('!!document.pictureInPictureElement'), { timeout: 10000 }).toBe(true);
+  await expect.poll(inPip, { timeout: 10000 }).toBe(true);
 
-  // The frame window (shown by hand here: Linux has no macOS video window to sit on).
+  // The controls (shown by hand here: Linux has no macOS video window to sit on).
   await app.evaluate(() => (globalThis as any).__kiteTest.pipFrame.showForTest({ x: 200, y: 200, width: 480, height: 270 }));
   await expect.poll(() => app.windows().some((p) => p.url().includes('mode=pip'))).toBe(true);
   const frame = app.windows().find((p) => p.url().includes('mode=pip'))!;
-  await frame.waitForSelector('[data-testid=pip-frame]');
-  const bounds = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('mode=pip'))!.getBounds());
-  expect(bounds).toMatchObject({ width: 480, height: 270 });
-  // Never takes focus from what you're doing.
-  expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('mode=pip'))!.isFocusable())).toBe(false);
+  await frame.waitForSelector('[data-testid=pip-frame][data-mode=full]');
+  // Sits just inside the video window (its edges stay free for resizing), never takes focus.
+  expect(await frameWin('bounds')).toMatchObject({ x: 205, y: 205, width: 470, height: 260 });
+  expect(await frameWin('focusable')).toBe(false);
+  // It reads the real video: this test video is a live stream, so "Live" and no slider.
+  await expect(frame.getByText('Live')).toBeAttached({ timeout: 5000 });
 
   const press = async (id: string) => {
-    await frame.mouse.move(240, 140);
-    await frame.getByTestId(id).hover();
+    await frame.mouse.move(100, 100);
+    await frame.mouse.move(110, 105);
+    await expect(frame.getByTestId('pip-frame')).toHaveAttribute('data-shown');
     await frame.getByTestId(id).click();
   };
-  const actions = () => app.evaluate(() => (globalThis as any).__kiteTest.frameActions as string[]);
 
-  // Minimize is handed to the frame (it resizes the real video window on macOS).
+  // Play / pause control the real video.
+  await press('pip-play');
+  await expect.poll(paused).toBe(true);
+  await press('pip-play');
+  await expect.poll(paused).toBe(false);
+
+  // Minimize: the floating window goes away, the video keeps playing, the controls become the mini player.
   await press('pip-frame-minimize');
-  await expect.poll(actions).toContain('minimize');
+  await frame.waitForSelector('[data-testid=pip-frame][data-mode=mini]');
+  await expect.poll(inPip).toBe(false);
+  expect(await paused()).toBe(false);
+  expect(await frameWin('bounds')).toMatchObject({ width: 360, height: 104 });
+  await frame.getByTestId('pip-play').click();
+  await expect.poll(paused).toBe(true);
+  await frame.getByTestId('pip-play').click();
+  await expect.poll(paused).toBe(false);
+
+  // Show video: the same video pops out again.
+  await frame.getByTestId('pip-frame-show').click();
+  await expect.poll(inPip, { timeout: 10000 }).toBe(true);
 
   // Back to tab: Kite shows the video's tab, and the video goes back into it.
+  await app.evaluate(() => (globalThis as any).__kiteTest.pipFrame.showForTest({ x: 200, y: 200, width: 480, height: 270 }));
+  await frame.waitForSelector('[data-testid=pip-frame][data-mode=full]');
   await press('pip-frame-back');
   await expect(win.locator('[data-title="Video Page"]')).toHaveAttribute('data-active', 'true');
-  await expect.poll(() => video('!!document.pictureInPictureElement'), { timeout: 10000 }).toBe(false);
+  await expect.poll(inPip, { timeout: 10000 }).toBe(false);
 
-  // Pop out again, then Close: the video goes back into its tab, paused.
+  // Pop out again, then Close: the video goes back into its tab, paused, and the controls disappear.
   await open(win, site.url('/two'));
-  await expect.poll(() => video('!!document.pictureInPictureElement'), { timeout: 10000 }).toBe(true);
+  await expect.poll(inPip, { timeout: 10000 }).toBe(true);
   await app.evaluate(() => (globalThis as any).__kiteTest.pipFrame.showForTest({ x: 200, y: 200, width: 480, height: 270 }));
+  await frame.waitForSelector('[data-testid=pip-frame][data-mode=full]');
   await press('pip-frame-close');
-  await expect.poll(() => video('!!document.pictureInPictureElement'), { timeout: 10000 }).toBe(false);
-  expect(await video("document.getElementById('v').paused")).toBe(true);
-  expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('mode=pip'))!.isVisible())).toBe(false);
+  await expect.poll(inPip, { timeout: 10000 }).toBe(false);
+  expect(await paused()).toBe(true);
+  expect(await frameWin('visible')).toBe(false);
   await app.close();
 });

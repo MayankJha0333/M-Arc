@@ -42,8 +42,10 @@ describe('auto picture-in-picture', () => {
 });
 
 /** Runs the in-page pop-out script against a pretend page. */
+const lastWindow: Record<string, unknown> = {};
 function runEnter(doc: Record<string, unknown>) {
-  return new Function('document', `return ${PIP_ENTER_SCRIPT}`)(doc) as Promise<string>;
+  for (const k of Object.keys(lastWindow)) delete lastWindow[k];
+  return new Function('window', 'document', `return ${PIP_ENTER_SCRIPT}`)(lastWindow, doc) as Promise<string>;
 }
 const video = (o: Record<string, unknown> = {}) => ({
   paused: false, ended: false, readyState: 4, videoWidth: 1280, clientWidth: 800, clientHeight: 450,
@@ -60,6 +62,7 @@ describe('pop-out script inside the page', () => {
     const big = video({ requestPictureInPicture: async () => void (popped = 'big') });
     expect(await runEnter(page([small, big]))).toBe('ok');
     expect(popped).toBe('big');
+    expect(lastWindow.__kitePipVideo).toBe(big); // remembered for the floating controls and mini player
   });
 
   it('a playing video that is still loading (buffering) can pop out', async () => {

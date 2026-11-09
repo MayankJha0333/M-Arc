@@ -38,10 +38,11 @@ export interface TestHooks {
   now: number | null;
   /** Simulate switching to another app (false) and back (true). */
   windowFocus(focused: boolean): void;
-  /** Floating-video frame: buttons clicked and hover changes, and pushing its state. */
+  /** Floating-video controls: buttons clicked, media commands, drags, and pushing its state. */
   pipFrameActions: string[];
-  pipFrameHover: boolean[];
-  pipFrameState(v: { compact: boolean }): void;
+  pipFrameMedia: unknown[];
+  pipFrameDrags: string[];
+  pipFrameState(v: import('@shared/pipFrame').PipFrameState): void;
   /** Simulate the floating video's "Back to tab". */
   focusTab(tabId: string): void;
 }
@@ -56,7 +57,7 @@ function makeWebBridge(): KiteBridge {
   const littleToMain = new Emitter<{ url: string; spaceId: string | null }>();
   const littleArchived = new Emitter<{ url: string; title: string }>();
   const pipState = new Emitter<{ tabId: string; popped: boolean }>();
-  const pipFrameState = new Emitter<{ compact: boolean }>();
+  const pipFrameState = new Emitter<import('@shared/pipFrame').PipFrameState>();
   const focusTab = new Emitter<string>();
   // Mirrors the main process: on leaving the app, pop out the first target that has a playing video.
   let pipTargets: string[] = [];
@@ -91,7 +92,8 @@ function makeWebBridge(): KiteBridge {
     now: null,
     windowFocus: (f) => void windowFocus(f),
     pipFrameActions: [],
-    pipFrameHover: [],
+    pipFrameMedia: [],
+    pipFrameDrags: [],
     pipFrameState: (v) => pipFrameState.emit(v),
     focusTab: (id) => focusTab.emit(id),
   };
@@ -117,7 +119,8 @@ function makeWebBridge(): KiteBridge {
     mediaPlaying: async () => false,
     debugLog() {},
     pipFrameAction: (a) => void hooks.pipFrameActions.push(a),
-    pipFrameHover: (over) => void hooks.pipFrameHover.push(over),
+    pipFrameMedia: (cmd) => void hooks.pipFrameMedia.push(cmd),
+    pipFrameDrag: (phase) => void hooks.pipFrameDrags.push(phase),
     onPipFrameState: (cb) => pipFrameState.on(cb),
     onFocusTab: (cb) => focusTab.on(cb),
     setPipTargets: (ids) => {

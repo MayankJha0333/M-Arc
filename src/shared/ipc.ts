@@ -31,11 +31,14 @@ export interface KiteBridge {
   mediaPlaying(webContentsId: number): Promise<boolean>;
   /** Write a line to kite-debug.log (only when running from source). */
   debugLog(msg: string): void;
-  /** Floating-video frame window: one of its buttons was clicked. */
-  pipFrameAction(action: 'back' | 'minimize' | 'close'): void;
-  /** Floating-video frame window: the mouse is over a button (take clicks) or not (let them through). */
-  pipFrameHover(over: boolean): void;
-  onPipFrameState(cb: (v: { compact: boolean }) => void): () => void;
+  /** Floating-video controls: Back to tab / Minimize / Show video / Close. */
+  pipFrameAction(action: import('./pipFrame').PipFrameAction): void;
+  /** Floating-video controls: play/pause, seek, skip. */
+  pipFrameMedia(cmd: import('./pip').PipMediaCommand): void;
+  /** Floating-video controls: you started / stopped dragging the video. */
+  pipFrameDrag(phase: 'start' | 'end'): void;
+  /** Floating-video controls: which layout, and where the video is. */
+  onPipFrameState(cb: (v: import('./pipFrame').PipFrameState) => void): () => void;
   /** Main window: show this tab (from the floating video's "Back to tab"). */
   onFocusTab(cb: (tabId: string) => void): () => void;
   /** Tabs to pop a video out of the moment you switch to another app (best first). */

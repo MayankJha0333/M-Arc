@@ -2767,7 +2767,7 @@ body.resizing-v * {
   pointer-events: none;
 }
 
-/* ---- Frame around the floating video (its own see-through window) ---- */
+/* ---- Floating video controls, design D (its own see-through window) ---- */
 html.pip-frame-doc,
 html.pip-frame-doc body,
 html.pip-frame-doc #root {
@@ -2776,81 +2776,373 @@ html.pip-frame-doc #root {
   height: 100%;
 }
 
-.pip-frame {
+.pipd,
+.pipd-mini-wrap {
   position: fixed;
   inset: 0;
   font-family: var(--font-ui, 'Figtree', system-ui, sans-serif);
   user-select: none;
+  color: #fff;
 }
 
-/* A soft light edge plus a hairline dark one, so it reads on bright and dark video. */
-.pip-frame-border {
-  position: absolute;
-  inset: 0;
-  border-radius: 10px;
-  box-shadow:
-    inset 0 0 0 1.5px rgba(255, 255, 255, 0.28),
-    inset 0 0 0 2.5px rgba(0, 0, 0, 0.35);
+/* Almost invisible, but not fully transparent: so this window takes the mouse
+   (Chromium's own buttons under it never show) and dragging moves the video. */
+.pipd {
+  background: rgba(0, 0, 0, 0.004);
+  cursor: grab;
+}
+.pipd:active {
+  cursor: grabbing;
+}
+
+.pipd-scrim,
+.pipd-corner,
+.pipd-back,
+.pipd-center,
+.pipd-bottom {
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+.pipd[data-shown] .pipd-scrim,
+.pipd[data-shown] .pipd-corner,
+.pipd[data-shown] .pipd-back,
+.pipd[data-shown] .pipd-center,
+.pipd[data-shown] .pipd-bottom {
+  opacity: 1;
+}
+.pipd:not([data-shown]) button,
+.pipd:not([data-shown]) input {
   pointer-events: none;
 }
 
-.pip-frame-bar {
+.pipd-scrim {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+}
+.pipd-scrim-top {
+  top: 0;
+  height: 56px;
+  background: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0));
+}
+.pipd-scrim-bottom {
+  bottom: 0;
+  height: 70px;
+  background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.58));
+}
+
+.pipd button {
+  cursor: default;
+  font: inherit;
+}
+
+.pipd-corner {
   position: absolute;
   top: 8px;
-  left: 50%;
+  left: 8px;
   display: flex;
-  gap: 2px;
-  padding: 3px;
+  gap: 8px;
+}
+
+.pipd-round {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
   border-radius: 999px;
-  background: rgba(22, 23, 28, 0.72);
-  backdrop-filter: blur(12px) saturate(1.4);
-  -webkit-backdrop-filter: blur(12px) saturate(1.4);
-  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.18), 0 6px 18px rgba(0, 0, 0, 0.35);
-  transform: translate(-50%, -4px);
-  opacity: 0;
-  transition: opacity 160ms ease, transform 160ms ease;
-  pointer-events: none;
-}
-
-.pip-frame[data-shown] .pip-frame-bar {
-  opacity: 1;
-  transform: translate(-50%, 0);
-  pointer-events: auto;
-}
-
-.pip-frame-btn {
-  width: 28px;
-  height: 24px;
+  background: #f2f3f5;
+  color: #1c1d22;
   display: grid;
   place-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 120ms ease, filter 120ms ease;
+}
+.pipd-round:hover {
+  transform: scale(1.08);
+  filter: brightness(0.92);
+}
+.pipd-round[data-testid='pip-frame-close']:hover {
+  background: #ff6159;
+  color: #4d0000;
+  filter: none;
+}
+
+.pipd-back {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(242, 243, 245, 0.94);
+  color: #1c1d22;
+  font-size: 11px !important;
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.pipd-back:hover {
+  background: #fff;
+}
+
+.pipd-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -60%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.pipd-play,
+.pipd-skip {
+  border: 0;
+  padding: 0;
+  border-radius: 999px;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  transition: transform 120ms ease, background 120ms ease;
+}
+.pipd-play {
+  width: 46px;
+  height: 46px;
+  background: rgba(18, 19, 24, 0.6);
+}
+.pipd-skip {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  background: rgba(18, 19, 24, 0.5);
+}
+.pipd-skip span {
+  position: absolute;
+  top: 14px;
+  font-size: 8px;
+  font-weight: 700;
+}
+.pipd-play:hover,
+.pipd-skip:hover {
+  transform: scale(1.06);
+  background: rgba(18, 19, 24, 0.78);
+}
+
+.pipd-bottom {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 7px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.pipd-live {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #e5484d;
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* The seek slider: a native range input (drag, click, keyboard) over a drawn track. */
+.pipd-seek {
+  position: relative;
+  flex: 1;
+  height: 16px;
+  display: flex;
+  align-items: center;
+}
+.pipd-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.3);
+  overflow: hidden;
+  transition: height 120ms ease;
+}
+.pipd-seek:hover .pipd-track,
+.pipd-mini[data-scrubbing] .pipd-track {
+  height: 6px;
+}
+.pipd-fill {
+  height: 100%;
+  background: #fff;
+}
+.pipd-seek input {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.pipd-seek input::-webkit-slider-runnable-track {
+  height: 16px;
+  background: transparent;
+}
+.pipd-seek input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  margin-top: 1.5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+
+/* Mini player */
+.pipd-mini-wrap {
+  padding: 8px;
+  box-sizing: border-box;
+}
+.pipd-mini {
+  height: 100%;
+  box-sizing: border-box;
+  border-radius: 16px;
+  background: #1a1b20;
+  box-shadow: 0 0 0 1px #2e3038, 0 8px 22px rgba(0, 0, 0, 0.32);
+  padding: 9px 9px 4px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  -webkit-app-region: drag; /* drag the card to move it */
+}
+.pipd-mini button,
+.pipd-mini input {
+  -webkit-app-region: no-drag;
+}
+.pipd-mini-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.pipd-mini-thumb {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 10px;
+  background: #2b2d36;
+  display: grid;
+  place-items: center;
+}
+.pipd-eq {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+.pipd-eq i {
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: #8e9bff;
+  transform-origin: bottom;
+  animation: pipd-eq 0.9s ease-in-out infinite;
+}
+.pipd-eq i:nth-child(2) {
+  animation-duration: 0.7s;
+  animation-delay: 0.2s;
+}
+.pipd-eq i:nth-child(3) {
+  animation-duration: 1.1s;
+  animation-delay: 0.1s;
+}
+.pipd-eq[data-paused] i {
+  animation-play-state: paused;
+}
+@keyframes pipd-eq {
+  0%,
+  100% {
+    transform: scaleY(0.45);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.pipd-mini-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pipd-mini-title {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pipd-mini-sub {
+  font-size: 11px;
+  color: #a7aab4;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pipd-mini-btn {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  padding: 0;
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.92);
+  color: #f4f5f7;
+  display: grid;
+  place-items: center;
   cursor: default;
   transition: background 120ms ease;
 }
-
-.pip-frame-btn:hover {
+.pipd-mini-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+.pipd-mini-show {
+  background: rgba(255, 255, 255, 0.12);
+}
+.pipd-mini .pipd-seek {
+  flex: none;
+  height: 14px;
+  margin: 0 2px;
+}
+.pipd-mini .pipd-track {
+  height: 3px;
   background: rgba(255, 255, 255, 0.16);
 }
-
-.pip-frame-btn[data-action='close']:hover {
-  background: rgba(255, 82, 82, 0.85);
+.pipd-mini .pipd-fill {
+  background: #8e9bff;
 }
-
-.pip-frame[data-compact] .pip-frame-bar {
-  top: 6px;
+.pipd-mini .pipd-seek input::-webkit-slider-thumb {
+  width: 10px;
+  height: 10px;
+  margin-top: 3px;
+  opacity: 0;
+  transition: opacity 120ms ease;
 }
-
-.pip-frame[data-compact] .pip-frame-btn {
-  width: 24px;
-  height: 22px;
+.pipd-mini:hover .pipd-seek input::-webkit-slider-thumb {
+  opacity: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pip-frame-bar,
-  .pip-frame-btn {
-    transition: none;
+  .pipd *,
+  .pipd-mini * {
+    transition: none !important;
+    animation: none !important;
   }
 }
