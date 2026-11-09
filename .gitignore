@@ -7,3 +7,4 @@ research-evidence/_empty-*
 *.log
 .DS_Store
 test-report/
+research-evidence/arc-inventory/
