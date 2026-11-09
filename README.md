@@ -113,8 +113,16 @@ What runs:
 
 On macOS, allow **Screen Recording** for your terminal (System Settings → Privacy & Security) to get screenshots of the floating video in the report.
 
-**On every push to GitHub** the same command runs on macOS, Linux and Windows
-(`.github/workflows/test.yml`); each system's report is attached to the run.
+### CI/CD on GitHub (`.github/workflows/ci.yml`)
+
+| When | What happens |
+|---|---|
+| Push to `main`, or a pull request into `main` | `npm run test:report` on **macOS, Linux and Windows**; each report is kept with the run and its summary shows on the run page |
+| All three pass on `main` | **Kite.dmg + Kite.zip** (Apple Silicon and Intel, unsigned) are built and kept with the run |
+| Push a version tag, e.g. `git tag v0.2.0 && git push --tags` | Same, plus a **GitHub Release** with the app attached |
+
+To stop anything untested reaching `main`: GitHub → Settings → Branches → add a rule for `main` →
+*Require status checks to pass* → pick **Test · macOS**, **Test · Linux** and **Test · Windows**.
 
 The UI tests run the app in a normal browser with simulated web pages that execute
 the **same** injected scripts as the real app (link catcher, Boosts, zap picker).
