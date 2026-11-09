@@ -123,6 +123,7 @@ export function PipFrameApp() {
     >
       {/* A curved shade only when the video window itself has rounded corners to match. */}
       {st.rounded && <div className="pipd-shade" />}
+      <div className="pipd-ring" />
 
       <div className="pipd-corner">
         <button className="pipd-round pipd-close" data-testid="pip-frame-close" aria-label="Close" title="Close" onClick={() => bridge.pipFrameAction('close')}>

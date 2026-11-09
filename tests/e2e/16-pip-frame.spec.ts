@@ -151,6 +151,14 @@ test.describe('floating video controls (design D)', () => {
     await expect(page.locator('.pipd-bottom')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   });
 
+  test('a thin dark edge always follows the video’s outline (hides macOS’s light rim at the corners)', async ({ page }) => {
+    await expect(page.locator('.pipd-ring')).toHaveCSS('border-radius', '0px');
+    await expect(page.locator('.pipd-ring')).toHaveCSS('opacity', '1'); // even with the controls hidden
+    await state(page, { rounded: true });
+    await expect(page.locator('.pipd-ring')).toHaveCSS('border-radius', '10px');
+    await expect(page.locator('.pipd-ring')).toHaveCSS('box-shadow', /inset/);
+  });
+
   test('the page is see-through', async ({ page }) => {
     for (const sel of ['html', 'body', '#root']) await expect(page.locator(sel)).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   });
