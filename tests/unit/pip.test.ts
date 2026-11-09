@@ -88,6 +88,11 @@ describe('pop-out script inside the page', () => {
     expect(played).toBe(true);
   });
 
+  it('a video that stopped a split second before the switch pops out, even after a click (swiping right after pressing play)', async () => {
+    const v = video({ paused: true, __kitePlayedAt: Date.now() - 300, __kiteUserPause: true, __kitePausedAt: Date.now() - 200, play: async () => undefined });
+    expect(await runEnter(page([v]))).toBe('ok (resumed)');
+  });
+
   it('a video you paused yourself, or one stopped long ago, stays put', async () => {
     expect(await runEnter(page([video({ paused: true, __kitePlayedAt: Date.now() - 300, __kiteUserPause: true })]))).toMatch(/^skipped paused-by-you/);
     expect(await runEnter(page([video({ paused: true, __kitePlayedAt: Date.now() - 60_000 })]))).toMatch(/^skipped paused/);
@@ -143,6 +148,7 @@ describe('media tracker inside the page', () => {
     p.v.paused = true;
     p.fire('pause');
     expect(p.v.__kiteUserPause).toBe(false);
+    expect(Date.now() - (p.v.__kitePausedAt as number)).toBeLessThan(1000); // when it stopped
     p.fire('play');
     expect(p.v.__kiteUserPause).toBe(false);
   });

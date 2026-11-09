@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect, openApp, newTab } from './fixtures';
 
 // Kite's floating video controls — design D — in their own see-through window.
-const state = (page: Page, s: Partial<{ mode: 'full' | 'mini'; t: number; d: number; paused: boolean; title: string; host: string }>) =>
+const state = (page: Page, s: Partial<{ mode: 'full' | 'mini'; t: number; d: number; paused: boolean; title: string; host: string; thumb: string }>) =>
   page.evaluate((v) => window.__kiteTest!.pipFrameState({ mode: 'full', t: 252, d: 660, paused: false, title: 'A video', host: 'youtube.com', ...v }), s);
 const hooks = (page: Page) => page.evaluate(() => ({ actions: window.__kiteTest!.pipFrameActions, media: window.__kiteTest!.pipFrameMedia, drags: window.__kiteTest!.pipFrameDrags }));
 
@@ -40,7 +40,7 @@ test.describe('floating video controls (design D)', () => {
     expect(close.x).toBeLessThan(20);
     expect(close.y).toBeLessThan(20);
     expect(min.x).toBeGreaterThan(close.x);
-    expect(Math.round(close.width)).toBe(22);
+    expect(Math.round(close.width)).toBe(20);
     expect(back.x + back.width).toBeGreaterThan(440);
     await expect(page.getByTestId('pip-frame-back')).toHaveText('Back to tab');
   });
@@ -98,11 +98,11 @@ test.describe('floating video controls (design D)', () => {
   });
 
   test('mini player: title, site and time; play/pause, Show video, Close and its own slider', async ({ page }) => {
-    await page.setViewportSize({ width: 360, height: 104 });
+    await page.setViewportSize({ width: 320, height: 90 });
     await state(page, { mode: 'mini', title: 'Lo-fi beats to study to' });
     await expect(page.getByTestId('pip-frame')).toHaveAttribute('data-mode', 'mini');
     await expect(page.getByText('Lo-fi beats to study to')).toBeVisible();
-    await expect(page.getByText('youtube.com ·')).toBeVisible();
+    await expect(page.getByText('· youtube.com')).toBeVisible();
     await expect(page.getByTestId('pip-time')).toHaveText('4:12');
     await page.getByTestId('pip-play').click();
     await page.getByTestId('pip-frame-show').click();
@@ -112,6 +112,28 @@ test.describe('floating video controls (design D)', () => {
     expect(h.actions).toEqual(['show', 'close']);
     expect(h.media).toContainEqual({ cmd: 'toggle' });
     expect(h.media).toContainEqual({ cmd: 'seek', t: 30 });
+  });
+
+  test('drag an edge or corner to resize the video', async ({ page }) => {
+    const box = (await page.getByTestId('pip-edge-se').boundingBox())!;
+    await page.mouse.move(box.x + 4, box.y + 4);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 40, box.y + 30);
+    await page.mouse.up();
+    const e = (await page.getByTestId('pip-edge-e').boundingBox())!;
+    await page.mouse.move(e.x + 2, e.y + 20);
+    await page.mouse.down();
+    await page.mouse.up();
+    expect((await hooks(page)).drags).toEqual(['start:se', 'end', 'start:e', 'end']);
+  });
+
+  test('mini player shows a snapshot of the video when there is one', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 90 });
+    await state(page, { mode: 'mini' });
+    await expect(page.locator('.pipm-thumb img')).toHaveCount(0);
+    const thumb = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/yQALCAABAAEBAREA/8wABgAQEAX/2gAIAQEAAD8A0s8g/9k=';
+    await state(page, { mode: 'mini', thumb });
+    await expect(page.locator('.pipm-thumb img')).toHaveAttribute('src', thumb);
   });
 
   test('the page is see-through', async ({ page }) => {

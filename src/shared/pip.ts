@@ -45,7 +45,9 @@ export const MEDIA_TRACKER_SCRIPT = `(() => {
   document.addEventListener('timeupdate', (e) => { if (isMedia(e.target) && !e.target.paused) e.target.__kitePlayedAt = Date.now(); }, true);
   document.addEventListener('play', (e) => { if (isMedia(e.target)) { e.target.__kiteUserPause = false; e.target.__kitePlayedAt = Date.now(); } }, true);
   document.addEventListener('pause', (e) => {
-    if (isMedia(e.target)) e.target.__kiteUserPause = Date.now() - lastInput < 1500 && document.visibilityState === 'visible';
+    if (!isMedia(e.target)) return;
+    e.target.__kitePausedAt = Date.now();
+    e.target.__kiteUserPause = Date.now() - lastInput < 1500 && document.visibilityState === 'visible';
   }, true);
 })()`;
 
@@ -64,7 +66,11 @@ export const PIP_ENTER_SCRIPT = `(async () => {
   if (!all.length) return 'none';
   const usable = (v) => !v.ended && v.readyState >= 1 && v.videoWidth > 0 && !v.disablePictureInPicture &&
     ((!v.muted && v.volume > 0) || v.clientWidth >= 480);
-  const justStopped = (v) => v.paused && v.__kiteUserPause !== true && Date.now() - (v.__kitePlayedAt || 0) < 2000;
+  // Stopped a split second ago (the switch itself paused it, whatever the cause), or
+  // stopped in the last two seconds without a click or key from you.
+  const justStopped = (v) => v.paused && (
+    (v.__kitePausedAt && Date.now() - v.__kitePausedAt < 700) ||
+    (v.__kiteUserPause !== true && Date.now() - (v.__kitePlayedAt || 0) < 2000));
   const bySize = (a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight;
   let vids = all.filter((v) => !v.paused && usable(v)).sort(bySize);
   let resume = false;
@@ -173,3 +179,19 @@ export function formatTime(sec: number): string {
   const r = String(s % 60).padStart(2, '0');
   return h ? `${h}:${String(m).padStart(2, '0')}:${r}` : `${m}:${r}`;
 }
+
+/** A small square snapshot of the floating video, for the mini player (null if the site forbids it). */
+export const PIP_THUMB_SCRIPT = `(() => {
+  const v = ${PIP_VIDEO};
+  if (!v || !v.videoWidth || !v.videoHeight) return null;
+  try {
+    const c = document.createElement('canvas');
+    c.width = 96; c.height = 96;
+    const s = Math.min(v.videoWidth, v.videoHeight);
+    c.getContext('2d').drawImage(v, (v.videoWidth - s) / 2, (v.videoHeight - s) / 2, s, s, 0, 0, 96, 96);
+    return c.toDataURL('image/jpeg', 0.72);
+  } catch (e) { return null; }
+})()`;
+
+/** Only a small JPEG snapshot is passed on to the mini player. */
+export const isThumb = (v: unknown): v is string => typeof v === 'string' && v.startsWith('data:image/jpeg;base64,') && v.length < 120_000;

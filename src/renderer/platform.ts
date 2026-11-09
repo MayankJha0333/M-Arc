@@ -120,7 +120,7 @@ function makeWebBridge(): KiteBridge {
     debugLog() {},
     pipFrameAction: (a) => void hooks.pipFrameActions.push(a),
     pipFrameMedia: (cmd) => void hooks.pipFrameMedia.push(cmd),
-    pipFrameDrag: (phase) => void hooks.pipFrameDrags.push(phase),
+    pipFrameDrag: (phase, edge) => void hooks.pipFrameDrags.push(edge ? `${phase}:${edge}` : phase),
     onPipFrameState: (cb) => pipFrameState.on(cb),
     onFocusTab: (cb) => focusTab.on(cb),
     setPipTargets: (ids) => {

@@ -35,8 +35,8 @@ export interface KiteBridge {
   pipFrameAction(action: import('./pipFrame').PipFrameAction): void;
   /** Floating-video controls: play/pause, seek, skip. */
   pipFrameMedia(cmd: import('./pip').PipMediaCommand): void;
-  /** Floating-video controls: you started / stopped dragging the video. */
-  pipFrameDrag(phase: 'start' | 'end'): void;
+  /** Floating-video controls: you started / stopped dragging the video (or one of its edges, to resize). */
+  pipFrameDrag(phase: 'start' | 'end', edge?: import('./pipFrame').ResizeEdge): void;
   /** Floating-video controls: which layout, and where the video is. */
   onPipFrameState(cb: (v: import('./pipFrame').PipFrameState) => void): () => void;
   /** Main window: show this tab (from the floating video's "Back to tab"). */

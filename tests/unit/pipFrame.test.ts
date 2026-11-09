@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { dragTo, fromCocoa, insetBounds, miniBounds, toCocoa, MINI_SIZE, FRAME_INSET } from '@shared/pipFrame';
-import { formatTime, isPipMediaCommand, MEDIA_STATE_SCRIPT, pipMediaScript, PIP_REENTER_SCRIPT, PIP_TO_MINI_SCRIPT } from '@shared/pip';
+import { dragTo, fromCocoa, miniBounds, resizeTo, toCocoa, MINI_SIZE, MIN_VIDEO_WIDTH } from '@shared/pipFrame';
+import { formatTime, isPipMediaCommand, isThumb, MEDIA_STATE_SCRIPT, pipMediaScript, PIP_REENTER_SCRIPT, PIP_TO_MINI_SCRIPT } from '@shared/pip';
 
 const screenH = 1117;
 const workArea = { x: 0, y: 38, width: 1728, height: 1079 }; // below the menu bar
@@ -13,14 +13,24 @@ describe('floating video frame geometry', () => {
     expect(toCocoa(b, screenH)).toEqual(cocoa);
   });
 
-  it('the frame sits just inside the video window, leaving its edges free for resizing', () => {
-    expect(insetBounds({ x: 100, y: 200, width: 480, height: 270 })).toEqual({
-      x: 100 + FRAME_INSET,
-      y: 200 + FRAME_INSET,
-      width: 480 - FRAME_INSET * 2,
-      height: 270 - FRAME_INSET * 2,
-    });
-    expect(insetBounds({ x: 0, y: 0, width: 4, height: 4 }).width).toBe(0);
+  it('resizing from a corner keeps the video’s shape and keeps the opposite corner still', () => {
+    const start = { x: 1000, y: 600, width: 480, height: 270 };
+    const se = resizeTo(start, 'se', { x: 1480, y: 870 }, { x: 1560, y: 880 }, 1600);
+    expect(se).toEqual({ x: 1000, y: 600, width: 560, height: 315 });
+    const nw = resizeTo(start, 'nw', { x: 1000, y: 600 }, { x: 900, y: 590 }, 1600);
+    expect(nw.width).toBe(580);
+    expect(nw.x + nw.width).toBe(1480); // right edge stays
+    expect(nw.y + nw.height).toBe(870); // bottom edge stays
+  });
+
+  it('resizing from a side grows from the middle; it never gets too small or too big', () => {
+    const start = { x: 1000, y: 600, width: 480, height: 270 };
+    const s = resizeTo(start, 's', { x: 0, y: 0 }, { x: 0, y: 54 }, 1600);
+    expect(s.width).toBe(576);
+    expect(s.x + s.width / 2).toBe(1240); // centred
+    expect(s.y).toBe(600);
+    expect(resizeTo(start, 'e', { x: 0, y: 0 }, { x: -900, y: 0 }, 1600).width).toBe(MIN_VIDEO_WIDTH);
+    expect(resizeTo(start, 'e', { x: 0, y: 0 }, { x: 5000, y: 0 }, 1200).width).toBe(1200);
   });
 
   it('the mini player goes to the bottom-right corner of the screen, above the Dock', () => {
@@ -42,6 +52,14 @@ describe('controlling the floating video', () => {
     expect(formatTime(65.9)).toBe('1:05');
     expect(formatTime(3723)).toBe('1:02:03');
     expect(formatTime(NaN)).toBe('0:00');
+  });
+
+  it('only a small JPEG snapshot reaches the mini player', () => {
+    expect(isThumb('data:image/jpeg;base64,AAAA')).toBe(true);
+    expect(isThumb('data:text/html,<script>')).toBe(false);
+    expect(isThumb('https://example.com/a.jpg')).toBe(false);
+    expect(isThumb('data:image/jpeg;base64,' + 'A'.repeat(200_000))).toBe(false);
+    expect(isThumb(null)).toBe(false);
   });
 
   it('accepts only well-formed commands (they come from another window)', () => {

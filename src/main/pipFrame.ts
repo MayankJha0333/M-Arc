@@ -1,15 +1,15 @@
-// Kite's floating video controls (design D): a panel window laid over Chromium's
-// video window. It covers the video completely (so Chromium's own buttons never
-// show), draws Close / Minimize / Back to tab / play, skip and a seek slider, and
-// moves the video window when you drag it. A thin strip around the edge is left
-// uncovered so you can still resize the video.
+// Kite's floating video controls (design D): a panel window laid exactly over
+// Chromium's video window. Chromium's window is told to ignore the mouse, so its
+// own buttons never show; Kite draws Close / Minimize / Back to tab / play, skip and
+// a seek slider, moves the video window when you drag it, and resizes it from its
+// edges and corners.
 //
 // Minimize turns the same window into a mini player (the video keeps playing in its
 // tab); "Show video" pops it out again.
 // The video window itself is found and moved through macWindows.ts (macOS only).
 
 import { BrowserWindow, screen } from 'electron';
-import { dragTo, fromCocoa, insetBounds, miniBounds, toCocoa, type PipFrameMode, type PipFrameState, type Rect } from '../shared/pipFrame';
+import { dragTo, fromCocoa, miniBounds, resizeTo, toCocoa, type PipFrameMode, type PipFrameState, type Rect, type ResizeEdge } from '../shared/pipFrame';
 
 export interface PipMediaInfo {
   t: number;
@@ -24,11 +24,15 @@ export interface PipFrameDeps {
   webPreferences(): Electron.WebPreferences;
   /** The floating video's playback position, and its page's title and site. */
   media(): Promise<(PipMediaInfo & { title: string; host: string }) | null>;
+  /** Mini player: a small snapshot of the video. */
+  thumb(): Promise<string | null>;
   native: {
     find(): { addr: number; frame: Rect } | null;
     setFrame(addr: number, cocoaFrame: Rect, animate: boolean): void;
     attach(addr: number, frameWindow: BrowserWindow): boolean;
     detach(addr: number, frameWindow: BrowserWindow): void;
+    /** Make the video window ignore the mouse (Kite's controls handle it all). */
+    ignoreMouse(addr: number): void;
     /** Run a risky step under the crash safety net (logged; skipped if it crashed last time). */
     step<T>(name: string, fn: () => T, fallback: T): T;
   };
@@ -45,7 +49,9 @@ export function createPipFrame(deps: PipFrameDeps) {
   let followTimer: ReturnType<typeof setInterval> | null = null;
   let mediaTimer: ReturnType<typeof setInterval> | null = null;
   let tries: ReturnType<typeof setTimeout>[] = [];
-  let drag: { from: { x: number; y: number }; start: Rect; timer: ReturnType<typeof setInterval>; stopAt: number } | null = null;
+  let drag: { kind: 'move' | ResizeEdge; from: { x: number; y: number }; start: Rect; timer: ReturnType<typeof setInterval>; stopAt: number } | null = null;
+  let thumbTimer: ReturnType<typeof setInterval> | null = null;
+  let thumb: string | undefined;
   let last: PipFrameState | null = null;
   /** Pinned to the video window natively (moves with it); otherwise moved by hand. */
   let pinned = false;
@@ -98,7 +104,16 @@ export function createPipFrame(deps: PipFrameDeps) {
       return;
     }
     missing = 0;
-    send({ mode: mode === 'mini' ? 'mini' : 'full', t: m.t, d: m.d, paused: m.paused, title: m.title, host: m.host });
+    send({ mode: mode === 'mini' ? 'mini' : 'full', t: m.t, d: m.d, paused: m.paused, title: m.title, host: m.host, thumb });
+  }
+
+  async function pollThumb() {
+    if (mode !== 'mini') return;
+    const t = await deps.thumb();
+    if (t && t !== thumb) {
+      thumb = t;
+      if (last) send({ ...last, thumb });
+    }
   }
 
   function startTimers() {
@@ -110,13 +125,14 @@ export function createPipFrame(deps: PipFrameDeps) {
   function stopTimers() {
     if (followTimer) clearInterval(followTimer);
     if (mediaTimer) clearInterval(mediaTimer);
-    followTimer = mediaTimer = null;
+    if (thumbTimer) clearInterval(thumbTimer);
+    followTimer = mediaTimer = thumbTimer = null;
   }
 
   /** Put the controls over the video window at `cocoaFrame`. */
   function place(addr: number, cocoaFrame: Rect) {
     const outer = fromCocoa(cocoaFrame, mainScreenHeight());
-    const inner = insetBounds(outer);
+    const inner = outer; // covers the whole video
     if (addr !== pipAddr || mode !== 'full') {
       const w = deps.native.step(
         'create and show',
@@ -134,6 +150,9 @@ export function createPipFrame(deps: PipFrameDeps) {
       pipBounds = outer;
       mode = 'full';
       pinned = deps.native.step('pin to the video', () => deps.native.attach(addr, w), false);
+      deps.native.step('video window ignores the mouse', () => deps.native.ignoreMouse(addr), undefined);
+      if (thumbTimer) clearInterval(thumbTimer);
+      thumbTimer = null;
       deps.log(`frame: controls shown over the video (${outer.width}×${outer.height}${pinned ? ', pinned' : ''})`);
       if (last) send({ ...last, mode: 'full' });
       startTimers();
@@ -161,6 +180,7 @@ export function createPipFrame(deps: PipFrameDeps) {
     pipAddr = 0;
     pipBounds = null;
     last = null;
+    thumb = undefined;
     if (win && !win.isDestroyed()) win.hide();
   }
 
@@ -191,27 +211,35 @@ export function createPipFrame(deps: PipFrameDeps) {
     w.showInactive();
     if (last) send({ ...last, mode: 'mini' });
     startTimers();
+    void pollThumb();
+    if (!thumbTimer) thumbTimer = setInterval(() => void pollThumb(), 4000);
     deps.log('frame: minimized to the mini player');
   }
 
-  /** Drag on the video: move the video window (the controls are pinned to it and follow). */
-  function startDrag() {
+  /**
+   * Drag on the video: move the video window (the controls are pinned to it and follow).
+   * Drag an edge or corner: resize it, keeping its shape.
+   */
+  function startDrag(kind: 'move' | ResizeEdge = 'move') {
     if (mode !== 'full' || !pipAddr || !pipBounds) return;
     endDrag();
     const addr = pipAddr;
     const start = pipBounds;
-    const from = screen.getCursorScreenPoint();
+    const maxWidth = Math.round(screen.getDisplayMatching(start).workArea.width * 0.9);
     drag = {
-      from,
+      kind,
+      from: screen.getCursorScreenPoint(),
       start,
       stopAt: Date.now() + 20_000, // never get stuck if the mouse-up is missed
       timer: setInterval(() => {
         if (!drag || Date.now() > drag.stopAt) return endDrag();
-        const next = dragTo(drag.start, drag.from, screen.getCursorScreenPoint());
+        const at = screen.getCursorScreenPoint();
+        const next = drag.kind === 'move' ? dragTo(drag.start, drag.from, at) : resizeTo(drag.start, drag.kind, drag.from, at, maxWidth);
         if (same(next, pipBounds)) return;
         pipBounds = next;
         deps.native.setFrame(addr, toCocoa(next, mainScreenHeight()), false);
-        if (!pinned) win?.setBounds(insetBounds(next));
+        // A pinned window moves with the video by itself, but doesn't change size with it.
+        if (!pinned || drag.kind !== 'move') win?.setBounds(next);
       }, 16),
     };
   }
@@ -236,7 +264,7 @@ export function createPipFrame(deps: PipFrameDeps) {
       const w = ensureWindow();
       mode = 'full';
       pipBounds = b;
-      w.setBounds(insetBounds(b));
+      w.setBounds(b);
       w.showInactive();
       startTimers();
       return w;

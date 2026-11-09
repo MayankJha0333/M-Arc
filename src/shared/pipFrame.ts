@@ -1,6 +1,6 @@
-// Geometry for Kite's frame around the floating video (border + Back / Minimize /
-// Close). macOS measures windows from the bottom-left of the main screen; Electron
-// from the top-left — these helpers convert, and work out the "minimized" size.
+// Geometry and state for Kite's floating video controls and mini player.
+// macOS measures windows from the bottom-left of the main screen; Electron from the
+// top-left — these helpers convert, move, resize and place the mini player.
 
 export interface Rect {
   x: number;
@@ -19,15 +19,36 @@ export function toCocoa(bounds: Rect, mainScreenHeight: number): Rect {
   return { x: bounds.x, y: mainScreenHeight - bounds.y - bounds.height, width: bounds.width, height: bounds.height };
 }
 
-/** The frame sits this far inside the video window, so its edges stay grabbable for resizing. */
-export const FRAME_INSET = 5;
+/** Edges and corners you can drag to resize the floating video. */
+export type ResizeEdge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+export const RESIZE_EDGES: readonly ResizeEdge[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+export const MIN_VIDEO_WIDTH = 220;
 
-export function insetBounds(b: Rect, by = FRAME_INSET): Rect {
-  return { x: b.x + by, y: b.y + by, width: Math.max(0, b.width - by * 2), height: Math.max(0, b.height - by * 2) };
+/**
+ * Resize from an edge or corner, keeping the video's shape. The opposite edge
+ * (or corner) stays put; side edges grow from the middle.
+ */
+export function resizeTo(start: Rect, edge: ResizeEdge, from: { x: number; y: number }, to: { x: number; y: number }, maxWidth: number): Rect {
+  const ratio = start.height / Math.max(1, start.width);
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const h = edge.includes('e') ? dx : edge.includes('w') ? -dx : 0;
+  const v = edge.includes('s') ? dy : edge.includes('n') ? -dy : 0;
+  // Follow whichever direction the mouse moved further (in width terms).
+  const grow = Math.abs(h) >= Math.abs(v / ratio) ? h : v / ratio;
+  const width = Math.round(Math.max(MIN_VIDEO_WIDTH, Math.min(maxWidth, start.width + grow)));
+  const height = Math.round(width * ratio);
+  let x = start.x;
+  let y = start.y;
+  if (edge.includes('w')) x = start.x + start.width - width;
+  else if (edge === 'n' || edge === 's') x = Math.round(start.x + (start.width - width) / 2);
+  if (edge.includes('n')) y = start.y + start.height - height;
+  else if (edge === 'e' || edge === 'w') y = Math.round(start.y + (start.height - height) / 2);
+  return { x, y, width, height };
 }
 
 /** Size of the mini player's window (the card plus room for its shadow). */
-export const MINI_SIZE = { width: 360, height: 104 } as const;
+export const MINI_SIZE = { width: 320, height: 90 } as const;
 const MARGIN = 12;
 
 /** Mini player: bottom-right corner of the screen the video was on. */
@@ -58,4 +79,6 @@ export interface PipFrameState {
   paused: boolean;
   title: string;
   host: string;
+  /** Mini player: a small snapshot of the video (JPEG data URL). */
+  thumb?: string;
 }

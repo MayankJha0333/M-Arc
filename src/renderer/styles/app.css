@@ -2777,33 +2777,58 @@ html.pip-frame-doc #root {
 }
 
 .pipd,
-.pipd-mini-wrap {
+.pipm-wrap {
   position: fixed;
   inset: 0;
   font-family: var(--font-ui, 'Figtree', system-ui, sans-serif);
   user-select: none;
   color: #fff;
+  -webkit-font-smoothing: antialiased;
+}
+.pipd button,
+.pipm-wrap button {
+  cursor: default;
+  font: inherit;
 }
 
-/* Almost invisible, but not fully transparent: so this window takes the mouse
-   (Chromium's own buttons under it never show) and dragging moves the video. */
+/* Almost invisible, but not fully transparent: so this window takes the mouse and
+   dragging moves the video. */
 .pipd {
   background: rgba(0, 0, 0, 0.004);
   cursor: grab;
+  border-radius: 10px;
 }
 .pipd:active {
   cursor: grabbing;
 }
 
-.pipd-scrim,
+/* One soft shade, darker only where the controls sit (top and bottom). */
+.pipd-shade {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.34) 0%,
+    rgba(0, 0, 0, 0.1) 18%,
+    rgba(0, 0, 0, 0) 34%,
+    rgba(0, 0, 0, 0) 60%,
+    rgba(0, 0, 0, 0.12) 76%,
+    rgba(0, 0, 0, 0.46) 100%
+  );
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  pointer-events: none;
+}
+
+.pipd-shade,
 .pipd-corner,
 .pipd-back,
 .pipd-center,
 .pipd-bottom {
   opacity: 0;
-  transition: opacity 160ms ease;
+  transition: opacity 180ms ease;
 }
-.pipd[data-shown] .pipd-scrim,
+.pipd[data-shown] .pipd-shade,
 .pipd[data-shown] .pipd-corner,
 .pipd[data-shown] .pipd-back,
 .pipd[data-shown] .pipd-center,
@@ -2815,75 +2840,58 @@ html.pip-frame-doc #root {
   pointer-events: none;
 }
 
-.pipd-scrim {
-  position: absolute;
-  left: 0;
-  right: 0;
-  pointer-events: none;
-}
-.pipd-scrim-top {
-  top: 0;
-  height: 56px;
-  background: linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0));
-}
-.pipd-scrim-bottom {
-  bottom: 0;
-  height: 70px;
-  background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.58));
-}
-
-.pipd button {
-  cursor: default;
-  font: inherit;
+.pipd-corner,
+.pipd-back,
+.pipd-center,
+.pipd-bottom {
+  z-index: 3;
 }
 
 .pipd-corner {
   position: absolute;
-  top: 8px;
-  left: 8px;
+  top: 10px;
+  left: 10px;
   display: flex;
-  gap: 8px;
+  gap: 7px;
 }
-
 .pipd-round {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border: 0;
   border-radius: 999px;
-  background: #f2f3f5;
-  color: #1c1d22;
+  background: rgba(245, 245, 247, 0.96);
+  color: #2a2b30;
   display: grid;
   place-items: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  transition: transform 120ms ease, filter 120ms ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 0 0 0.5px rgba(0, 0, 0, 0.2);
+  transition: transform 120ms ease, background 120ms ease, color 120ms ease;
 }
 .pipd-round:hover {
   transform: scale(1.08);
-  filter: brightness(0.92);
 }
-.pipd-round[data-testid='pip-frame-close']:hover {
-  background: #ff6159;
+.pipd-close:hover {
+  background: #ff5f57;
   color: #4d0000;
-  filter: none;
 }
 
 .pipd-back {
   position: absolute;
-  top: 7px;
-  right: 8px;
-  height: 24px;
+  top: 9px;
+  right: 10px;
+  height: 22px;
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 0 10px 0 8px;
+  padding: 0 9px 0 7px;
   border: 0;
   border-radius: 999px;
-  background: rgba(242, 243, 245, 0.94);
-  color: #1c1d22;
+  background: rgba(245, 245, 247, 0.96);
+  color: #2a2b30;
   font-size: 11px !important;
-  font-weight: 500;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 0 0 0.5px rgba(0, 0, 0, 0.2);
+  transition: background 120ms ease;
 }
 .pipd-back:hover {
   background: #fff;
@@ -2893,12 +2901,11 @@ html.pip-frame-doc #root {
   position: absolute;
   left: 50%;
   top: 50%;
-  transform: translate(-50%, -60%);
+  transform: translate(-50%, -55%);
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
 }
-
 .pipd-play,
 .pipd-skip {
   border: 0;
@@ -2907,52 +2914,69 @@ html.pip-frame-doc #root {
   color: #fff;
   display: grid;
   place-items: center;
+  background: rgba(12, 12, 16, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), 0 4px 14px rgba(0, 0, 0, 0.22);
   transition: transform 120ms ease, background 120ms ease;
 }
 .pipd-play {
-  width: 46px;
-  height: 46px;
-  background: rgba(18, 19, 24, 0.6);
+  width: 48px;
+  height: 48px;
 }
 .pipd-skip {
   position: relative;
   width: 36px;
   height: 36px;
-  background: rgba(18, 19, 24, 0.5);
 }
 .pipd-skip span {
   position: absolute;
   top: 14px;
-  font-size: 8px;
+  font-size: 7.5px;
   font-weight: 700;
 }
 .pipd-play:hover,
 .pipd-skip:hover {
   transform: scale(1.06);
-  background: rgba(18, 19, 24, 0.78);
+  background: rgba(12, 12, 16, 0.6);
 }
 
 .pipd-bottom {
   position: absolute;
   left: 12px;
   right: 12px;
-  bottom: 7px;
+  bottom: 8px;
   display: flex;
   align-items: center;
   gap: 10px;
   font-size: 11px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 .pipd-live {
   margin-left: auto;
   padding: 1px 6px;
   border-radius: 4px;
   background: #e5484d;
-  font-weight: 600;
-  font-size: 10px;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
+  text-shadow: none;
 }
+
+/* Resize from any edge or corner. */
+.pipd-edge {
+  position: absolute;
+  z-index: 2;
+}
+.pipd-edge[data-edge='n'] { top: 0; left: 10px; right: 10px; height: 5px; cursor: ns-resize; }
+.pipd-edge[data-edge='s'] { bottom: 0; left: 10px; right: 10px; height: 5px; cursor: ns-resize; }
+.pipd-edge[data-edge='e'] { right: 0; top: 10px; bottom: 10px; width: 5px; cursor: ew-resize; }
+.pipd-edge[data-edge='w'] { left: 0; top: 10px; bottom: 10px; width: 5px; cursor: ew-resize; }
+.pipd-edge[data-edge='nw'] { top: 0; left: 0; width: 10px; height: 10px; cursor: nwse-resize; }
+.pipd-edge[data-edge='se'] { bottom: 0; right: 0; width: 10px; height: 10px; cursor: nwse-resize; }
+.pipd-edge[data-edge='ne'] { top: 0; right: 0; width: 10px; height: 10px; cursor: nesw-resize; }
+.pipd-edge[data-edge='sw'] { bottom: 0; left: 0; width: 10px; height: 10px; cursor: nesw-resize; }
 
 /* The seek slider: a native range input (drag, click, keyboard) over a drawn track. */
 .pipd-seek {
@@ -2966,15 +2990,15 @@ html.pip-frame-doc #root {
   position: absolute;
   left: 0;
   right: 0;
-  height: 4px;
+  height: 3px;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.28);
   overflow: hidden;
   transition: height 120ms ease;
 }
 .pipd-seek:hover .pipd-track,
-.pipd-mini[data-scrubbing] .pipd-track {
-  height: 6px;
+.pipm[data-scrubbing] .pipd-track {
+  height: 5px;
 }
 .pipd-fill {
   height: 100%;
@@ -2996,152 +3020,208 @@ html.pip-frame-doc #root {
 }
 .pipd-seek input::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 13px;
-  height: 13px;
-  margin-top: 1.5px;
+  width: 12px;
+  height: 12px;
+  margin-top: 2px;
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  transform: scale(0.7);
+  transition: transform 120ms ease;
+}
+.pipd-seek:hover input::-webkit-slider-thumb {
+  transform: scale(1);
 }
 
-/* Mini player */
-.pipd-mini-wrap {
+/* ---- Mini player: a compact card; drag it anywhere ---- */
+.pipm-wrap {
   padding: 8px;
   box-sizing: border-box;
 }
-.pipd-mini {
+.pipm {
+  position: relative;
   height: 100%;
   box-sizing: border-box;
-  border-radius: 16px;
-  background: #1a1b20;
-  box-shadow: 0 0 0 1px #2e3038, 0 8px 22px rgba(0, 0, 0, 0.32);
-  padding: 9px 9px 4px 9px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  -webkit-app-region: drag; /* drag the card to move it */
-}
-.pipd-mini button,
-.pipd-mini input {
-  -webkit-app-region: no-drag;
-}
-.pipd-mini-row {
   display: flex;
   align-items: center;
-  gap: 9px;
-  min-width: 0;
+  gap: 10px;
+  padding: 0 8px 8px 10px;
+  border-radius: 18px;
+  background: #18191e;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 10px 28px rgba(0, 0, 0, 0.36),
+    0 1px 3px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  -webkit-app-region: drag;
 }
-.pipd-mini-thumb {
-  width: 38px;
-  height: 38px;
+.pipm button,
+.pipm input {
+  -webkit-app-region: no-drag;
+}
+.pipm-thumb {
+  position: relative;
+  width: 46px;
+  height: 46px;
   flex: none;
-  border-radius: 10px;
-  background: #2b2d36;
-  display: grid;
-  place-items: center;
+  border-radius: 11px;
+  overflow: hidden;
+  background: #2a2c35;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
-.pipd-eq {
+.pipm-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.pipm-thumb-blank {
+  width: 100%;
+  height: 100%;
+}
+.pipm-eq {
+  position: absolute;
+  left: 5px;
+  bottom: 5px;
   display: flex;
   align-items: flex-end;
-  gap: 2px;
-  height: 14px;
+  gap: 1.5px;
+  height: 11px;
+  padding: 2px 3px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
 }
-.pipd-eq i {
-  width: 3px;
-  height: 14px;
-  border-radius: 2px;
-  background: #8e9bff;
+.pipm-eq i {
+  width: 2px;
+  height: 100%;
+  border-radius: 1px;
+  background: #fff;
   transform-origin: bottom;
-  animation: pipd-eq 0.9s ease-in-out infinite;
+  animation: pipm-eq 0.9s ease-in-out infinite;
 }
-.pipd-eq i:nth-child(2) {
+.pipm-eq i:nth-child(2) {
   animation-duration: 0.7s;
   animation-delay: 0.2s;
 }
-.pipd-eq i:nth-child(3) {
+.pipm-eq i:nth-child(3) {
   animation-duration: 1.1s;
   animation-delay: 0.1s;
 }
-.pipd-eq[data-paused] i {
-  animation-play-state: paused;
-}
-@keyframes pipd-eq {
+@keyframes pipm-eq {
   0%,
   100% {
-    transform: scaleY(0.45);
+    transform: scaleY(0.4);
   }
   50% {
     transform: scaleY(1);
   }
 }
-.pipd-mini-text {
+.pipm-text {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
-.pipd-mini-title {
-  font-size: 12px;
+.pipm-title {
+  font-size: 12.5px;
   font-weight: 600;
+  line-height: 1.2;
+  color: #f4f5f7;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.pipd-mini-sub {
+.pipm-sub {
   font-size: 11px;
-  color: #a7aab4;
+  line-height: 1.2;
+  color: #d6d8de;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.pipd-mini-btn {
+.pipm-dim {
+  color: #8d919c;
+}
+.pipm-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.pipm-play {
   width: 32px;
   height: 32px;
-  flex: none;
+  margin-right: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #f4f5f7;
+  color: #111216;
+  display: grid;
+  place-items: center;
+  transition: transform 120ms ease;
+}
+.pipm-play:hover {
+  transform: scale(1.06);
+}
+.pipm-btn {
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: #f4f5f7;
+  color: #b9bcc6;
   display: grid;
   place-items: center;
-  cursor: default;
-  transition: background 120ms ease;
+  transition: background 120ms ease, color 120ms ease;
 }
-.pipd-mini-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
+.pipm-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
-.pipd-mini-show {
+.pipm-progress {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 3px;
+}
+.pipm-progress .pipd-seek {
+  height: 10px;
+}
+.pipm-progress .pipd-seek input {
+  height: 10px;
+}
+.pipm-progress .pipd-track {
+  height: 2px;
   background: rgba(255, 255, 255, 0.12);
 }
-.pipd-mini .pipd-seek {
-  flex: none;
-  height: 14px;
-  margin: 0 2px;
+.pipm:hover .pipm-progress .pipd-track,
+.pipm[data-scrubbing] .pipm-progress .pipd-track {
+  height: 4px;
 }
-.pipd-mini .pipd-track {
-  height: 3px;
-  background: rgba(255, 255, 255, 0.16);
+.pipm-progress .pipd-fill {
+  background: rgba(255, 255, 255, 0.85);
 }
-.pipd-mini .pipd-fill {
-  background: #8e9bff;
+.pipm-progress .pipd-seek input::-webkit-slider-runnable-track {
+  height: 10px;
 }
-.pipd-mini .pipd-seek input::-webkit-slider-thumb {
+.pipm-progress .pipd-seek input::-webkit-slider-thumb {
   width: 10px;
   height: 10px;
-  margin-top: 3px;
-  opacity: 0;
-  transition: opacity 120ms ease;
+  margin-top: 0;
+  transform: scale(0);
 }
-.pipd-mini:hover .pipd-seek input::-webkit-slider-thumb {
-  opacity: 1;
+.pipm:hover .pipm-progress .pipd-seek input::-webkit-slider-thumb {
+  transform: scale(1);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .pipd *,
-  .pipd-mini * {
+  .pipm * {
     transition: none !important;
     animation: none !important;
   }

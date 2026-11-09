@@ -386,7 +386,7 @@ test('video pop-out: a video you paused yourself does not pop out when you switc
     }, js);
   // You click pause in the page.
   await video("window.dispatchEvent(new PointerEvent('pointerdown')); document.getElementById('v').pause(); true");
-  await win.waitForTimeout(300);
+  await win.waitForTimeout(1000); // you paused it, then later switched apps
   await app.evaluate(({ app }) => app.emit('did-resign-active'));
   await win.waitForTimeout(1000);
   expect(await video('!!document.pictureInPictureElement')).toBe(false);
@@ -419,8 +419,8 @@ test('floating video controls (design D): play/pause, minimize to the mini playe
   await expect.poll(() => app.windows().some((p) => p.url().includes('mode=pip'))).toBe(true);
   const frame = app.windows().find((p) => p.url().includes('mode=pip'))!;
   await frame.waitForSelector('[data-testid=pip-frame][data-mode=full]');
-  // Sits just inside the video window (its edges stay free for resizing), never takes focus.
-  expect(await frameWin('bounds')).toMatchObject({ x: 205, y: 205, width: 470, height: 260 });
+  // Covers the video window exactly (Kite does the resizing), never takes focus.
+  expect(await frameWin('bounds')).toMatchObject({ x: 200, y: 200, width: 480, height: 270 });
   expect(await frameWin('focusable')).toBe(false);
   // It reads the real video: this test video is a live stream, so "Live" and no slider.
   await expect(frame.getByText('Live')).toBeAttached({ timeout: 5000 });
@@ -443,7 +443,7 @@ test('floating video controls (design D): play/pause, minimize to the mini playe
   await frame.waitForSelector('[data-testid=pip-frame][data-mode=mini]');
   await expect.poll(inPip).toBe(false);
   expect(await paused()).toBe(false);
-  expect(await frameWin('bounds')).toMatchObject({ width: 360, height: 104 });
+  expect(await frameWin('bounds')).toMatchObject({ width: 320, height: 90 });
   await frame.getByTestId('pip-play').click();
   await expect.poll(paused).toBe(true);
   await frame.getByTestId('pip-play').click();

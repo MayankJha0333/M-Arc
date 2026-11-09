@@ -359,6 +359,17 @@ export function frameStep<T>(log: Log, step: string, fn: () => T, fallback: T): 
   }
 }
 
+/** Chromium's video window stops taking the mouse: Kite's controls on top handle it all. */
+export function ignoreMouseOnPipWindow(log: Log, addr: number) {
+  const o = load(log);
+  if (!o) return;
+  try {
+    o.setBool(addr, o.sel('setIgnoresMouseEvents:'), true);
+  } catch (err) {
+    log(`frame: could not make the video window ignore the mouse: ${(err as Error).message}`);
+  }
+}
+
 /** Unpin Kite's controls from the video window (before the video window closes). */
 export function detachFromPipWindow(log: Log, addr: number, frameWindow: BrowserWindow) {
   const o = load(log);

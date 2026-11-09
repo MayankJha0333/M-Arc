@@ -23,10 +23,10 @@ import { Storage } from './storage';
 import { findAction, toAccelerator } from '../shared/shortcuts';
 import { hostOf } from '../shared/url';
 import type { OpenRequest } from '../shared/ipc';
-import { attachToPipWindow, detachFromPipWindow, findPipWindow, floatPipWindowsSoon, frameStep, installVideoPanelHooks, setPipWindowFrame } from './macWindows';
+import { attachToPipWindow, detachFromPipWindow, findPipWindow, ignoreMouseOnPipWindow, floatPipWindowsSoon, frameStep, installVideoPanelHooks, setPipWindowFrame } from './macWindows';
 import { createPipFrame } from './pipFrame';
-import { PIP_FRAME_ACTIONS, type PipFrameAction } from '../shared/pipFrame';
-import { isPipMediaCommand, MEDIA_STATE_SCRIPT, pipMediaScript, PIP_REENTER_SCRIPT, PIP_TO_MINI_SCRIPT } from '../shared/pip';
+import { PIP_FRAME_ACTIONS, RESIZE_EDGES, type PipFrameAction, type ResizeEdge } from '../shared/pipFrame';
+import { isPipMediaCommand, isThumb, MEDIA_STATE_SCRIPT, pipMediaScript, PIP_REENTER_SCRIPT, PIP_THUMB_SCRIPT, PIP_TO_MINI_SCRIPT } from '../shared/pip';
 import { MEDIA_PLAYING_SCRIPT, MEDIA_TRACKER_SCRIPT, PIP_CLOSE_SCRIPT, PIP_ENTER_SCRIPT, PIP_EXIT_SCRIPT, pipPopped } from '../shared/pip';
 
 const isMac = process.platform === 'darwin';
@@ -144,12 +144,17 @@ const pipFrame = createPipFrame({
     }
     return { ...m, title: wc.getTitle(), host };
   },
+  thumb: async () => {
+    const t = await runInPipPage(PIP_THUMB_SCRIPT, false);
+    return isThumb(t) ? t : null;
+  },
   native: {
     find: () => findPipWindow(debugLog),
     setFrame: (addr, f, animate) => setPipWindowFrame(debugLog, addr, f, animate),
     step: (name, fn, fallback) => frameStep(debugLog, name, fn, fallback),
     attach: (addr, w) => attachToPipWindow(debugLog, addr, w),
     detach: (addr, w) => detachFromPipWindow(debugLog, addr, w),
+    ignoreMouse: (addr) => ignoreMouseOnPipWindow(debugLog, addr),
   },
 });
 /** The page whose video is floating right now (however it got there). */
@@ -623,10 +628,10 @@ function setupIpc() {
     if (!pipFrame.isFrameWindow(BrowserWindow.fromWebContents(e.sender)) || !isPipMediaCommand(cmd)) return;
     void runInPipPage(pipMediaScript(cmd), true).then(() => pipFrame.refresh());
   });
-  // Drag on the video: move the floating window.
-  on('pip-frame:drag', (e, phase: unknown) => {
+  // Drag on the video: move the floating window; drag an edge or corner: resize it.
+  on('pip-frame:drag', (e, phase: unknown, edge: unknown) => {
     if (!pipFrame.isFrameWindow(BrowserWindow.fromWebContents(e.sender))) return;
-    if (phase === 'start') pipFrame.startDrag();
+    if (phase === 'start') pipFrame.startDrag(RESIZE_EDGES.includes(edge as ResizeEdge) ? (edge as ResizeEdge) : 'move');
     else pipFrame.endDrag();
   });
   on('pip-frame:action', (e, action: PipFrameAction) => {
