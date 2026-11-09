@@ -30,17 +30,22 @@ export function planOnSwitch(before: ID[], after: ID[], playing: Record<ID, bool
 /**
  * Runs in every frame of a page that may play video: remembers when each video
  * last played, and whether a pause came from you (page in front) or from the
- * system (page going to the background — Chrome pauses some background videos,
- * e.g. muted ones, the moment you switch away). Safe to run more than once.
+ * system (page going to the background — Chrome and some sites pause videos the
+ * moment you switch away or swipe to another desktop). Safe to run more than once.
  */
 export const MEDIA_TRACKER_SCRIPT = `(() => {
   if (window.__kiteMediaTracker) return;
   window.__kiteMediaTracker = true;
   const isMedia = (t) => t && typeof t.paused === 'boolean' && typeof t.play === 'function';
+  // A pause is yours only if you clicked, tapped or pressed a key in the page just before.
+  // (Being "in front" isn't enough: while you swipe to another desktop Kite still is.)
+  let lastInput = 0;
+  const input = () => { lastInput = Date.now(); };
+  for (const t of ['pointerdown', 'keydown', 'touchstart']) window.addEventListener(t, input, true);
   document.addEventListener('timeupdate', (e) => { if (isMedia(e.target) && !e.target.paused) e.target.__kitePlayedAt = Date.now(); }, true);
   document.addEventListener('play', (e) => { if (isMedia(e.target)) { e.target.__kiteUserPause = false; e.target.__kitePlayedAt = Date.now(); } }, true);
   document.addEventListener('pause', (e) => {
-    if (isMedia(e.target)) e.target.__kiteUserPause = document.visibilityState === 'visible' && document.hasFocus();
+    if (isMedia(e.target)) e.target.__kiteUserPause = Date.now() - lastInput < 1500 && document.visibilityState === 'visible';
   }, true);
 })()`;
 
@@ -57,7 +62,7 @@ export const PIP_ENTER_SCRIPT = `(async () => {
   if (document.pictureInPictureElement) return 'already';
   const all = Array.from(document.querySelectorAll('video'));
   if (!all.length) return 'none';
-  const usable = (v) => !v.ended && v.readyState >= 2 && v.videoWidth > 0 && !v.disablePictureInPicture &&
+  const usable = (v) => !v.ended && v.readyState >= 1 && v.videoWidth > 0 && !v.disablePictureInPicture &&
     ((!v.muted && v.volume > 0) || v.clientWidth >= 480);
   const justStopped = (v) => v.paused && v.__kiteUserPause !== true && Date.now() - (v.__kitePlayedAt || 0) < 2000;
   const bySize = (a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight;

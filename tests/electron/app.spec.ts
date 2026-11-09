@@ -365,8 +365,9 @@ test('video pop-out: a video the system paused as you switched apps still pops o
       return wc ? wc.executeJavaScript(code) : null;
     }, js);
   await win.waitForTimeout(600); // a few "still playing" ticks
-  // What Chrome does to some background videos the moment you switch away: pause it (page not in front).
-  await video("Object.defineProperty(document, 'hasFocus', { value: () => false }); document.getElementById('v').pause(); true");
+  // What Chrome or the site does the moment you switch away or swipe to another desktop:
+  // pause it, with no click or key from you (Kite may even still be in front).
+  await video("document.getElementById('v').pause(); true");
   expect(await video("document.getElementById('v').paused")).toBe(true);
   await app.evaluate(({ app }) => app.emit('did-resign-active'));
   await expect.poll(() => video('!!document.pictureInPictureElement'), { timeout: 10000 }).toBe(true);
@@ -383,7 +384,8 @@ test('video pop-out: a video you paused yourself does not pop out when you switc
       const wc = webContents.getAllWebContents().find((w) => w.getType() === 'webview' && w.getURL().includes('/video'));
       return wc ? wc.executeJavaScript(code) : null;
     }, js);
-  await video("Object.defineProperty(document, 'hasFocus', { value: () => true }); document.getElementById('v').pause(); true");
+  // You click pause in the page.
+  await video("window.dispatchEvent(new PointerEvent('pointerdown')); document.getElementById('v').pause(); true");
   await win.waitForTimeout(300);
   await app.evaluate(({ app }) => app.emit('did-resign-active'));
   await win.waitForTimeout(1000);

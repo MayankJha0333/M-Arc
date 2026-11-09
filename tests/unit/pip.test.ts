@@ -62,6 +62,11 @@ describe('pop-out script inside the page', () => {
     expect(popped).toBe('big');
   });
 
+  it('a playing video that is still loading (buffering) can pop out', async () => {
+    expect(await runEnter(page([video({ readyState: 1 })]))).toBe('ok');
+    expect(await runEnter(page([video({ readyState: 0 })]))).toMatch(/^skipped/);
+  });
+
   it('explains why nothing popped out', async () => {
     expect(await runEnter(page([], { pictureInPictureEnabled: false }))).toBe('off');
     expect(await runEnter(page([], { pictureInPictureElement: {} }))).toBe('already');
@@ -105,13 +110,13 @@ describe('pop-out script inside the page', () => {
 describe('media tracker inside the page', () => {
   function fakePage() {
     const handlers: Record<string, (e: { target: unknown }) => void> = {};
-    const doc = { visibilityState: 'visible', focused: true, hasFocus() { return this.focused; }, addEventListener: (t: string, f: (e: { target: unknown }) => void) => (handlers[t] = f) };
-    const win: Record<string, unknown> = {};
+    const doc = { visibilityState: 'visible', hasFocus: () => true, addEventListener: (t: string, f: (e: { target: unknown }) => void) => (handlers[t] = f) };
+    const win = { addEventListener: (t: string, f: (e: { target: unknown }) => void) => (handlers[t] = f) } as Record<string, unknown>;
     new Function('window', 'document', MEDIA_TRACKER_SCRIPT)(win, doc);
     new Function('window', 'document', MEDIA_TRACKER_SCRIPT)(win, doc); // safe to run twice
     const v: Record<string, unknown> = { paused: false, play() {} };
     const fire = (t: string) => handlers[t]({ target: v });
-    return { doc, v, fire, handlers };
+    return { doc, v, fire };
   }
 
   it('remembers when a video last played', () => {
@@ -120,17 +125,31 @@ describe('media tracker inside the page', () => {
     expect(Date.now() - (v.__kitePlayedAt as number)).toBeLessThan(1000);
   });
 
-  it('a pause while the page is in front is yours; one while switching away is the system’s', () => {
-    const a = fakePage();
-    a.v.paused = true;
-    a.fire('pause');
-    expect(a.v.__kiteUserPause).toBe(true);
-    const b = fakePage();
-    b.doc.focused = false;
-    b.v.paused = true;
-    b.fire('pause');
-    expect(b.v.__kiteUserPause).toBe(false);
-    b.fire('play');
-    expect(b.v.__kiteUserPause).toBe(false);
+  it('a pause right after you click or press a key is yours', () => {
+    for (const t of ['pointerdown', 'keydown']) {
+      const p = fakePage();
+      p.fire(t);
+      p.v.paused = true;
+      p.fire('pause');
+      expect(p.v.__kiteUserPause).toBe(true);
+    }
+  });
+
+  it('a pause with no click or key just before is the system’s — even with Kite in front (swiping desktops)', () => {
+    const p = fakePage();
+    p.v.paused = true;
+    p.fire('pause');
+    expect(p.v.__kiteUserPause).toBe(false);
+    p.fire('play');
+    expect(p.v.__kiteUserPause).toBe(false);
+  });
+
+  it('a click while the page is hidden does not count', () => {
+    const p = fakePage();
+    p.fire('pointerdown');
+    p.doc.visibilityState = 'hidden';
+    p.v.paused = true;
+    p.fire('pause');
+    expect(p.v.__kiteUserPause).toBe(false);
   });
 });
