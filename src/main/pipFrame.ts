@@ -31,6 +31,8 @@ export interface PipFrameDeps {
     setFrame(addr: number, cocoaFrame: Rect, animate: boolean): void;
     /** Make the video window ignore the mouse (Kite's controls handle it all). */
     ignoreMouse(addr: number): void;
+    /** Re-check that the video window still ignores the mouse; true if it had to be fixed. */
+    keepIgnoringMouse(addr: number): boolean;
     /** Round the video window's corners if that's safe; true if it did. */
     round(addr: number, radius: number): boolean;
     /** Run a risky step under the crash safety net (logged; skipped if it crashed last time). */
@@ -170,7 +172,12 @@ export function createPipFrame(deps: PipFrameDeps) {
     if (mode !== 'full' || !pipAddr || drag) return;
     const p = deps.native.find();
     if (!p || p.addr !== pipAddr) return hide('video window closed');
+    if (deps.native.keepIgnoringMouse(p.addr)) deps.log('frame: the video window was taking the mouse again — switched off');
+    const before = pipBounds;
     place(p.addr, p.frame);
+    if (before && pipBounds && (before.width !== pipBounds.width || before.height !== pipBounds.height)) {
+      deps.log(`frame: video window resized to ${pipBounds.width}×${pipBounds.height}; controls follow`);
+    }
   }
 
   function hide(why: string) {

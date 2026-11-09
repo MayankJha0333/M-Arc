@@ -386,8 +386,28 @@ export function ignoreMouseOnPipWindow(log: Log, addr: number) {
   if (!o) return;
   try {
     o.setBool(addr, o.sel('setIgnoresMouseEvents:'), true);
+    // Its own shadow comes with a pale 1px outline around the window's edge, which
+    // nothing on top can cover; Kite draws the edge itself instead.
+    o.setBool(addr, o.sel('setHasShadow:'), false);
   } catch (err) {
     log(`frame: could not make the video window ignore the mouse: ${(err as Error).message}`);
+  }
+}
+
+/**
+ * Chromium may switch its window back to taking the mouse (then its own buttons and
+ * grey shade appear). Checked while the controls are up; true if it had to be fixed.
+ */
+export function keepPipWindowIgnoringMouse(log: Log, addr: number): boolean {
+  const o = load(log);
+  if (!o) return false;
+  try {
+    if (o.sendBool(addr, o.sel('ignoresMouseEvents'))) return false;
+    o.setBool(addr, o.sel('setIgnoresMouseEvents:'), true);
+    o.setBool(addr, o.sel('setHasShadow:'), false);
+    return true;
+  } catch {
+    return false;
   }
 }
 

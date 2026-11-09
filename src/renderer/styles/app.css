@@ -2791,10 +2791,11 @@ html.pip-frame-doc #root {
   font: inherit;
 }
 
-/* Almost invisible, but not fully transparent: so this window takes the mouse and
-   dragging moves the video. */
+/* Almost invisible, but clearly not transparent to macOS: so this window takes the
+   mouse (a nearly-zero alpha can count as "see-through" and let clicks fall through
+   to Chromium's window underneath, which then shows its own buttons and grey shade). */
 .pipd {
-  background: rgba(0, 0, 0, 0.004);
+  background: rgba(0, 0, 0, 0.02);
   cursor: grab;
 }
 .pipd[data-rounded] {
@@ -2828,7 +2829,7 @@ html.pip-frame-doc #root {
   inset: 0;
   z-index: 1;
   border-radius: 0;
-  box-shadow: inset 0 0 0 1.5px rgba(0, 0, 0, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.6), inset 0 0 0 2px rgba(0, 0, 0, 0.18);
   pointer-events: none;
 }
 .pipd[data-rounded] .pipd-ring {

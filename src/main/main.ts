@@ -23,7 +23,7 @@ import { Storage } from './storage';
 import { findAction, toAccelerator } from '../shared/shortcuts';
 import { hostOf } from '../shared/url';
 import type { OpenRequest } from '../shared/ipc';
-import { findPipWindow, ignoreMouseOnPipWindow, roundPipWindowIfSafe, floatPipWindowsSoon, frameStep, installVideoPanelHooks, setPipWindowFrame } from './macWindows';
+import { findPipWindow, ignoreMouseOnPipWindow, keepPipWindowIgnoringMouse, roundPipWindowIfSafe, floatPipWindowsSoon, frameStep, installVideoPanelHooks, setPipWindowFrame } from './macWindows';
 import { createPipFrame } from './pipFrame';
 import { PIP_FRAME_ACTIONS, RESIZE_EDGES, type PipFrameAction, type ResizeEdge } from '../shared/pipFrame';
 import { isPipMediaCommand, isThumb, MEDIA_STATE_SCRIPT, pipMediaScript, PIP_REENTER_SCRIPT, PIP_THUMB_SCRIPT, PIP_TO_MINI_SCRIPT } from '../shared/pip';
@@ -153,6 +153,7 @@ const pipFrame = createPipFrame({
     setFrame: (addr, f, animate) => setPipWindowFrame(debugLog, addr, f, animate),
     step: (name, fn, fallback) => frameStep(debugLog, name, fn, fallback),
     ignoreMouse: (addr) => ignoreMouseOnPipWindow(debugLog, addr),
+    keepIgnoringMouse: (addr) => keepPipWindowIgnoringMouse(debugLog, addr),
     round: (addr, r) => roundPipWindowIfSafe(debugLog, addr, r),
   },
 });
