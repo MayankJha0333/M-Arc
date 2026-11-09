@@ -23,7 +23,7 @@ import { Storage } from './storage';
 import { findAction, toAccelerator } from '../shared/shortcuts';
 import { hostOf } from '../shared/url';
 import type { OpenRequest } from '../shared/ipc';
-import { attachToPipWindow, findPipWindow, floatPipWindowsSoon, installVideoPanelHooks, roundPipWindow, setPipWindowFrame } from './macWindows';
+import { attachToPipWindow, findPipWindow, floatPipWindowsSoon, frameStep, installVideoPanelHooks, setPipWindowFrame } from './macWindows';
 import { createPipFrame } from './pipFrame';
 import { PIP_FRAME_ACTIONS, type PipFrameAction } from '../shared/pipFrame';
 import { MEDIA_PLAYING_SCRIPT, MEDIA_TRACKER_SCRIPT, PIP_CLOSE_SCRIPT, PIP_ENTER_SCRIPT, PIP_EXIT_SCRIPT, pipPopped } from '../shared/pip';
@@ -131,7 +131,7 @@ const pipFrame = createPipFrame({
   native: {
     find: () => findPipWindow(debugLog),
     setFrame: (addr, f) => setPipWindowFrame(debugLog, addr, f),
-    round: (addr, r) => roundPipWindow(debugLog, addr, r),
+    step: (name, fn, fallback) => frameStep(debugLog, name, fn, fallback),
     attach: (addr, w) => attachToPipWindow(debugLog, addr, w),
   },
 });

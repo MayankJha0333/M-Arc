@@ -6,8 +6,6 @@
 import { BrowserWindow, screen } from 'electron';
 import { compactBounds, fromCocoa, isCompact, toCocoa, type PipFrameAction, type Rect } from '../shared/pipFrame';
 
-export const FRAME_RADIUS = 12;
-
 export interface PipFrameDeps {
   log(msg: string): void;
   url(): string;
@@ -15,8 +13,9 @@ export interface PipFrameDeps {
   native: {
     find(): { addr: number; frame: Rect } | null;
     setFrame(addr: number, cocoaFrame: Rect): void;
-    round(addr: number, radius: number): void;
     attach(addr: number, frameWindow: BrowserWindow): boolean;
+    /** Run a risky step under the crash safety net (logged; skipped if it crashed last time). */
+    step<T>(name: string, fn: () => T, fallback: T): T;
   };
 }
 
@@ -68,17 +67,24 @@ export function createPipFrame(deps: PipFrameDeps) {
 
   /** Put the frame over the video window at `cocoaFrame`. */
   function place(addr: number, cocoaFrame: Rect) {
-    const w = ensureWindow();
     const fresh = addr !== pipAddr;
-    pipAddr = addr;
-    bounds = fromCocoa(cocoaFrame, mainScreenHeight());
-    w.setBounds(bounds);
+    const next = fromCocoa(cocoaFrame, mainScreenHeight());
     if (fresh) {
+      const w = deps.native.step('create and show', () => {
+        const win = ensureWindow();
+        win.setBounds(next);
+        win.showInactive();
+        return win;
+      }, null);
+      if (!w) return;
+      pipAddr = addr;
+      bounds = next;
       restore = null;
-      deps.native.round(addr, FRAME_RADIUS);
-      w.showInactive();
-      const pinned = deps.native.attach(addr, w);
-      deps.log(`frame: shown over the video (${bounds.width}×${bounds.height}${pinned ? ', pinned' : ''})`);
+      const pinned = deps.native.step('pin to the video', () => deps.native.attach(addr, w), false);
+      deps.log(`frame: shown over the video (${next.width}×${next.height}${pinned ? ', pinned' : ''})`);
+    } else {
+      bounds = next;
+      win?.setBounds(next);
     }
     sendState();
     if (!timer) timer = setInterval(sync, 150);

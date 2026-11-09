@@ -41,11 +41,11 @@ interface ObjC {
 
 let objc: ObjC | null | false = null;
 
-// ---- Crash safety net -----------------------------------------------------------
-// This reaches into macOS directly; if it ever crashes Kite, the next launch turns
-// the panel step off (for that build of Kite) instead of crashing again.
+// ---- Crash safety nets ----------------------------------------------------------
+// This reaches into macOS directly. If a step ever crashes Kite, the next launch of
+// the same build skips that step instead of crashing again (a new build tries again).
+// Two separate nets: making the video a panel, and Kite's frame around it.
 
-const guardFile = () => join(app.getPath('userData'), 'pip-panel-guard');
 function buildId(): string {
   try {
     return String(statSync(join(__dirname, 'main.cjs')).mtimeMs);
@@ -53,50 +53,65 @@ function buildId(): string {
     return app.getVersion();
   }
 }
-let disabled: boolean | null = null;
-function panelsDisabled(log: Log): boolean {
-  if (disabled !== null) return disabled;
-  disabled = false;
-  try {
-    if (existsSync(guardFile())) {
-      if (readFileSync(guardFile(), 'utf8') === buildId()) {
-        disabled = true;
-        log('panel: turned off — Kite closed unexpectedly while doing this last time');
-      } else unlinkSync(guardFile()); // a newer build: try again
+
+function crashGuard(name: string, what: string) {
+  const file = () => join(app.getPath('userData'), name);
+  let disabled: boolean | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const clear = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    try {
+      unlinkSync(file());
+    } catch {
+      /* already gone */
     }
-  } catch {
-    /* ignore */
-  }
-  return disabled;
+  };
+  return {
+    /** Did this step crash Kite last time (same build)? */
+    isOff(log: Log): boolean {
+      if (disabled !== null) return disabled;
+      disabled = false;
+      try {
+        if (existsSync(file())) {
+          if (readFileSync(file(), 'utf8') === buildId()) {
+            disabled = true;
+            log(`${what}: turned off — Kite closed unexpectedly while doing this last time`);
+          } else unlinkSync(file());
+        }
+      } catch {
+        /* ignore */
+      }
+      return disabled;
+    },
+    /** About to do the risky step: leave a marker that's cleared if Kite survives it. */
+    arm() {
+      try {
+        writeFileSync(file(), buildId());
+      } catch {
+        /* ignore */
+      }
+      if (!timer) app.once('will-quit', clear); // a normal quit is not a crash
+      if (timer) clearTimeout(timer);
+      // Survived the change and half a minute of macOS using it (switching apps etc.).
+      timer = setTimeout(clear, 30_000);
+    },
+    clear,
+  };
 }
-const clearGuard = () => {
-  try {
-    unlinkSync(guardFile());
-  } catch {
-    /* already gone */
-  }
-};
-let guardTimer: ReturnType<typeof setTimeout> | null = null;
-function armGuard() {
-  try {
-    writeFileSync(guardFile(), buildId());
-  } catch {
-    /* ignore */
-  }
-  if (!guardTimer) app.once('will-quit', clearGuard); // a normal quit is not a crash
-  // Survived the change and half a minute of macOS using it (switching apps etc.): clear the marker.
-  if (guardTimer) clearTimeout(guardTimer);
-  guardTimer = setTimeout(clearGuard, 30_000);
-}
+
+const panelGuard = crashGuard('pip-panel-guard', 'panel');
+const frameGuard = crashGuard('pip-frame-guard', 'frame');
+const armGuard = () => panelGuard.arm();
 function guarded<T>(fn: () => T): T {
-  armGuard();
+  panelGuard.arm();
   return fn();
 }
 
 function load(log: Log): ObjC | null {
   if (objc !== null) return objc || null;
   objc = false;
-  if (process.platform !== 'darwin' || panelsDisabled(log)) return null;
+  if (process.platform !== 'darwin' || panelGuard.isOff(log)) return null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const koffi = require('koffi');
@@ -314,27 +329,30 @@ export function setPipWindowFrame(log: Log, addr: number, cocoaFrame: Rect) {
   const o = load(log);
   if (!o) return;
   try {
+    log('frame: resizing the video window…');
+    frameGuard.arm();
     o.setFrame(addr, cocoaFrame, true);
   } catch (err) {
     log(`frame: could not resize the video window: ${(err as Error).message}`);
   }
 }
 
-/** Rounded corners on the video window, to match the frame's border. */
-export function roundPipWindow(log: Log, addr: number, radius: number) {
-  const o = load(log);
-  if (!o) return;
+/**
+ * Kite's frame steps (show over the video, pin to it) run through here: if one
+ * ever crashes Kite, the next launch of this build shows no frame instead.
+ * The video window's own drawing is never touched — making it see-through to round
+ * its corners crashed macOS once it counted as a panel.
+ */
+export function frameStep<T>(log: Log, step: string, fn: () => T, fallback: T): T {
+  if (process.platform !== 'darwin' || frameGuard.isOff(log)) return fallback;
+  log(`frame: ${step}…`);
+  panelGuard.clear(); // the panel step is done by now; don't blame it for what follows
+  frameGuard.arm();
   try {
-    const view = o.send(addr, o.sel('contentView'));
-    const layer = view ? o.send(view, o.sel('layer')) : 0;
-    if (!layer) return log('frame: video window has no layer to round');
-    o.setDouble(layer, o.sel('setCornerRadius:'), radius);
-    o.setBool(layer, o.sel('setMasksToBounds:'), true);
-    o.setBool(addr, o.sel('setOpaque:'), false);
-    o.setUInt(addr, o.sel('setBackgroundColor:'), o.send(o.cls('NSColor'), o.sel('clearColor')));
-    o.call(addr, o.sel('invalidateShadow'));
+    return fn();
   } catch (err) {
-    log(`frame: could not round the video window: ${(err as Error).message}`);
+    log(`frame: ${step} failed: ${(err as Error).message}`);
+    return fallback;
   }
 }
 

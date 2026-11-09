@@ -2787,7 +2787,7 @@ html.pip-frame-doc #root {
 .pip-frame-border {
   position: absolute;
   inset: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   box-shadow:
     inset 0 0 0 1.5px rgba(255, 255, 255, 0.28),
     inset 0 0 0 2.5px rgba(0, 0, 0, 0.35);
