@@ -2805,23 +2805,6 @@ html.pip-frame-doc #root {
   cursor: grabbing;
 }
 
-/* One soft shade, darker only where the controls sit (top and bottom). */
-.pipd-shade {
-  position: absolute;
-  inset: 0;
-  border-radius: 10px;
-  background: linear-gradient(
-    180deg,
-    rgba(0, 0, 0, 0.34) 0%,
-    rgba(0, 0, 0, 0.1) 18%,
-    rgba(0, 0, 0, 0) 34%,
-    rgba(0, 0, 0, 0) 60%,
-    rgba(0, 0, 0, 0.12) 76%,
-    rgba(0, 0, 0, 0.46) 100%
-  );
-  pointer-events: none;
-}
-
 /* Always-on thin dark edge, exactly on the video's outline (curved when it is): it hides
    the light rim macOS draws around the window, so no pale line shows at the corners. */
 .pipd-ring {
@@ -2836,7 +2819,6 @@ html.pip-frame-doc #root {
   border-radius: 10px;
 }
 
-.pipd-shade,
 .pipd-corner,
 .pipd-back,
 .pipd-center,
@@ -2844,7 +2826,6 @@ html.pip-frame-doc #root {
   opacity: 0;
   transition: opacity 180ms ease;
 }
-.pipd[data-shown] .pipd-shade,
 .pipd[data-shown] .pipd-corner,
 .pipd[data-shown] .pipd-back,
 .pipd[data-shown] .pipd-center,
@@ -2968,8 +2949,8 @@ html.pip-frame-doc #root {
   font-variant-numeric: tabular-nums;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
-/* No shade (square video window): the time and slider sit in a small rounded bar. */
-.pipd:not([data-rounded]) .pipd-bottom {
+/* No shade: the time and slider sit in a small rounded bar so they stay readable. */
+.pipd .pipd-bottom {
   left: 8px;
   right: 8px;
   bottom: 8px;

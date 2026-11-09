@@ -121,8 +121,6 @@ export function PipFrameApp() {
       onPointerCancel={endDrag}
       onLostPointerCapture={endDrag}
     >
-      {/* A curved shade only when the video window itself has rounded corners to match. */}
-      {st.rounded && <div className="pipd-shade" />}
       <div className="pipd-ring" />
 
       <div className="pipd-corner">

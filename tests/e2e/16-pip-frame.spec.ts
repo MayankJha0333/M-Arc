@@ -136,19 +136,19 @@ test.describe('floating video controls (design D)', () => {
     await expect(page.locator('.pipm-thumb img')).toHaveAttribute('src', thumb);
   });
 
-  test('square video window: no shade (no bright corners); the time and slider sit in a small rounded bar', async ({ page }) => {
+  test('the time and slider sit in a small rounded bar', async ({ page }) => {
     await page.mouse.move(100, 100);
     await expect(page.locator('.pipd-shade')).toHaveCount(0);
     await expect(page.locator('.pipd-bottom')).toHaveCSS('border-radius', '9px');
     await expect(page.locator('.pipd-bottom')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   });
 
-  test('rounded video window: a curved shade that matches its corners', async ({ page }) => {
+  test('no shade on hover, rounded or not — just the controls', async ({ page }) => {
     await state(page, { rounded: true });
     await page.mouse.move(100, 100);
-    await expect(page.locator('.pipd-shade')).toHaveCSS('border-radius', '10px');
-    await expect(page.getByTestId('pip-frame')).toHaveCSS('border-radius', '10px');
-    await expect(page.locator('.pipd-bottom')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await expect(page.getByTestId('pip-frame')).toHaveAttribute('data-shown');
+    await expect(page.locator('.pipd-shade')).toHaveCount(0);
+    await expect(page.locator('.pipd-bottom')).toHaveCSS('border-radius', '9px');
   });
 
   test('a thin dark edge always follows the video’s outline (hides macOS’s light rim at the corners)', async ({ page }) => {
