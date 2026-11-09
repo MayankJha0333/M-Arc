@@ -132,7 +132,7 @@ export interface RouteRule {
 
 export type SidebarSide = 'left' | 'right';
 export type Density = 'compact' | 'comfortable' | 'roomy';
-export type FontChoice = 'figtree' | 'bricolage' | 'system' | 'mono';
+export type FontChoice = 'figtree' | 'bricolage' | 'inter' | 'system' | 'mono';
 
 export interface Settings {
   sidebarSide: SidebarSide;
@@ -146,6 +146,8 @@ export interface Settings {
   showUrlBar: boolean;
   showTabCloseOnHover: boolean;
   favoritesColumns: number;
+  /** How many tabs keep their page loaded; older ones sleep to save memory. */
+  awakeTabs: number;
   /** null = never */
   archiveAfterMs: number | null;
   littleArchiveAfterMs: number | null;
@@ -164,6 +166,8 @@ export interface Settings {
   chromeCss: string;
   reduceMotion: boolean;
   tidyTitles: boolean;
+  /** Visual style and its fine-tuning (see shared/look.ts). */
+  look: import('./look').Look;
 }
 
 export interface AppState {

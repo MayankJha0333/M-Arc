@@ -1,6 +1,7 @@
 // Turns a Space theme + settings into CSS variables for the whole window.
 
 import type { Settings, SpaceTheme } from '@shared/types';
+import { defaultLook, styleById, type Look, type StyleDef } from '@shared/look';
 
 type RGB = [number, number, number];
 
@@ -42,51 +43,152 @@ export function resolveDark(theme: SpaceTheme, systemDark: boolean): boolean {
 const FONTS: Record<Settings['font'], string> = {
   figtree: "'Figtree', ui-sans-serif, system-ui, sans-serif",
   bricolage: "'Bricolage Grotesque', 'Figtree', ui-sans-serif, sans-serif",
+  inter: "'Inter', ui-sans-serif, system-ui, sans-serif",
   system: "ui-sans-serif, -apple-system, 'Segoe UI', system-ui, sans-serif",
   mono: "ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace",
 };
 
 const ROW: Record<Settings['density'], number> = { compact: 30, comfortable: 36, roomy: 42 };
 
+const rgba = (hex: string, a: number) => {
+  const [r, g, b] = hexToRgb(hex);
+  return `rgba(${r},${g},${b},${Math.round(Math.max(0, Math.min(1, a)) * 1000) / 1000})`;
+};
+
+/** How the selected tab and hovered rows look, per style. */
+function rowSurfaces(style: StyleDef, dark: boolean, accent: string, translucent: number): Record<string, string> {
+  switch (style.activeRow) {
+    case 'glass':
+      return {
+        '--hover': dark ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.36)',
+        '--active': dark ? `rgba(255,255,255,${0.1 + translucent * 0.06})` : `rgba(255,255,255,${0.78 - translucent * 0.3})`,
+        '--active-shadow': dark ? 'inset 0 0 0 1px rgba(255,255,255,.12), 0 8px 24px rgba(0,0,0,.3)' : 'inset 0 0 0 1px rgba(255,255,255,.75), 0 6px 20px rgba(30,40,80,.10)',
+      };
+    case 'bar':
+      return {
+        '--hover': dark ? 'rgba(255,255,255,.05)' : 'rgba(40,30,20,.045)',
+        '--active': dark ? 'rgba(255,255,255,.07)' : 'rgba(40,30,20,.06)',
+        '--active-shadow': `inset 3px 0 0 ${accent}`,
+      };
+    case 'soft':
+      return {
+        '--hover': dark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.04)',
+        '--active': dark ? 'rgba(255,255,255,.09)' : 'rgba(0,0,0,.07)',
+        '--active-shadow': 'none',
+      };
+    case 'glow':
+      return {
+        '--hover': dark ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.4)',
+        '--active': dark ? 'rgba(255,255,255,.09)' : 'rgba(255,255,255,.8)',
+        '--active-shadow': `inset 0 0 0 1px ${rgba(accent, dark ? 0.55 : 0.45)}, 0 0 22px ${rgba(accent, dark ? 0.32 : 0.22)}`,
+      };
+    default:
+      return {
+        '--hover': dark ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.42)',
+        '--active': dark ? 'rgba(255,255,255,.13)' : 'rgba(255,255,255,.78)',
+        '--active-shadow': dark ? '0 1px 0 rgba(255,255,255,.06) inset, 0 2px 10px rgba(0,0,0,.25)' : '0 1px 2px rgba(60,40,20,.08), 0 2px 10px rgba(60,40,20,.06)',
+      };
+  }
+}
+
+/** The window's background, per backdrop choice. */
+function backdropCss(kind: Look['backdrop'], base: string, a: string, b: string, colors: [string, string], dark: boolean): string {
+  const mid = mix(a, b, 0.5);
+  switch (kind) {
+    case 'solid':
+      return mix(base, mid, 0.35);
+    case 'tint':
+      return mid;
+    case 'mesh':
+      return [
+        `radial-gradient(120% 90% at 0% 0%, ${rgba(colors[0], dark ? 0.32 : 0.55)} 0%, transparent 55%)`,
+        `radial-gradient(110% 90% at 100% 15%, ${rgba(colors[1], dark ? 0.3 : 0.42)} 0%, transparent 60%)`,
+        `radial-gradient(120% 80% at 40% 100%, ${rgba(mix(colors[0], colors[1], 0.5), dark ? 0.22 : 0.35)} 0%, transparent 60%)`,
+        base,
+      ].join(', ');
+    default:
+      return `linear-gradient(165deg, ${a} 0%, ${mid} 55%, ${b} 100%)`;
+  }
+}
+
+/**
+ * Everything the window's look needs, as CSS variables: the style (look), the
+ * Space's colours and light/dark mode, and the layout settings.
+ */
 export function themeVars(theme: SpaceTheme, settings: Settings, systemDark: boolean): Record<string, string> {
+  const look = settings.look ?? defaultLook('calm');
+  const style = styleById(look.style);
   const dark = resolveDark(theme, systemDark);
-  const base = dark ? '#16171c' : '#f4f1ec';
+  const tone = dark ? style.dark : style.light;
+  const base = tone.base;
   const t = Math.max(0, Math.min(1, theme.intensity));
-  // In dark mode the tint is held back so colors glow instead of shout.
-  const k = dark ? 0.12 + t * 0.38 : 0.18 + t * 0.62;
+  // In dark mode the tint is held back so colours glow instead of shout.
+  const k = tone.tint[0] + t * (tone.tint[1] - tone.tint[0]);
   const a = mix(base, theme.colors[0], k);
   const b = mix(base, theme.colors[1], k);
-  const ink = dark ? '#f1efea' : '#1e1c1a';
-  const accentRaw = theme.colors[1];
-  // Accent must stay readable on the chrome; push it toward the ink color until it is.
+  const ink = tone.ink;
+  const high = look.contrast === 'high';
+  const accentRaw = look.accent ?? theme.colors[1];
+  // The accent must stay readable on the chrome; push it toward the ink colour until it is.
   let accent = accentRaw;
   for (let i = 0; i < 8 && contrast(accent, mix(a, b, 0.5)) < 3; i++) accent = mix(accent, ink, 0.18);
+  const lineA = (dark ? 0.02 + look.border * 0.2 : 0.02 + look.border * 0.2286) + (high ? 0.08 : 0);
+  const lineRgb = dark ? '255,255,255' : '40,30,20';
+  const ringA = (dark ? 0.06 : 0.06) * (look.border / 0.35);
+  const depth = look.shadow / 0.5;
+  const shadow = dark
+    ? `0 0 0 1px rgba(255,255,255,${Math.min(0.2, ringA).toFixed(3)})${look.shadow > 0 ? `, 0 12px 32px rgba(0,0,0,${Math.min(0.8, 0.45 * depth).toFixed(3)})` : ''}`
+    : `0 0 0 1px rgba(60,40,20,${Math.min(0.2, ringA).toFixed(3)})${look.shadow > 0 ? `, 0 10px 30px rgba(60,40,20,${Math.min(0.3, 0.12 * depth).toFixed(3)})` : ''}`;
+  const glassy = look.translucency;
+  const overlayA = 0.94 - glassy * 0.22;
   return {
     '--chrome-a': a,
     '--chrome-b': b,
     '--chrome-mid': mix(a, b, 0.5),
+    '--backdrop': backdropCss(look.backdrop, base, a, b, theme.colors, dark),
     '--ink': ink,
-    '--ink-2': dark ? 'rgba(241,239,234,.68)' : 'rgba(30,28,26,.64)',
-    '--ink-3': dark ? 'rgba(241,239,234,.42)' : 'rgba(30,28,26,.40)',
-    '--hover': dark ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.42)',
-    '--active': dark ? 'rgba(255,255,255,.13)' : 'rgba(255,255,255,.78)',
-    '--active-shadow': dark ? '0 1px 0 rgba(255,255,255,.06) inset, 0 2px 10px rgba(0,0,0,.25)' : '0 1px 2px rgba(60,40,20,.08), 0 2px 10px rgba(60,40,20,.06)',
-    '--line': dark ? 'rgba(255,255,255,.09)' : 'rgba(40,30,20,.10)',
-    '--card': dark ? '#1f2027' : '#ffffff',
-    '--overlay': dark ? 'rgba(24,25,31,.92)' : 'rgba(252,250,247,.94)',
+    '--ink-2': rgba(ink, high ? 0.86 : dark ? 0.68 : 0.64),
+    '--ink-3': rgba(ink, high ? 0.62 : dark ? 0.42 : 0.4),
+    ...rowSurfaces(style, dark, accent, glassy),
+    '--line': `rgba(${lineRgb},${lineA.toFixed(3)})`,
+    '--card': tone.card,
+    '--overlay': dark ? rgba(mix(tone.card, '#000000', 0.15), overlayA - 0.02) : rgba(mix(tone.card, base, 0.3), overlayA),
+    '--blur': `${Math.round(8 + glassy * 26)}px`,
     '--scrim': dark ? 'rgba(0,0,0,.45)' : 'rgba(40,30,20,.22)',
     '--accent': accent,
     '--accent-ink': luminance(accent) > 0.45 ? '#1e1c1a' : '#ffffff',
+    '--accent-soft': rgba(accent, dark ? 0.22 : 0.14),
     '--tint-1': theme.colors[0],
     '--tint-2': theme.colors[1],
-    '--shadow': dark ? '0 0 0 1px rgba(255,255,255,.06), 0 12px 32px rgba(0,0,0,.45)' : '0 0 0 1px rgba(60,40,20,.06), 0 10px 30px rgba(60,40,20,.12)',
+    '--shadow': shadow,
     '--grain-opacity': theme.grain ? (dark ? '.10' : '.16') : '0',
-    '--font': FONTS[settings.font],
+    '--font': FONTS[settings.font] ?? FONTS.figtree,
     '--scale': String(settings.fontScale),
     '--radius': `${settings.radius}px`,
     '--gap': `${settings.gap}px`,
     '--sidebar-w': `${settings.sidebarWidth}px`,
     '--row-h': `${ROW[settings.density]}px`,
+    '--ease': style.motion.ease,
+    '--dur': `${style.motion.ms}ms`,
     colorScheme: dark ? 'dark' : 'light',
   };
+}
+
+/**
+ * How readable a look is: text on the sidebar, and the accent on the sidebar.
+ * Ratios follow WCAG (4.5 is the bar for normal text, 3 for large text and icons).
+ */
+export function readability(theme: SpaceTheme, settings: Settings, systemDark: boolean): { text: number; accent: number; ok: boolean } {
+  const v = themeVars(theme, settings, systemDark);
+  const chrome = v['--chrome-mid'];
+  const text = contrast(v['--ink'], chrome);
+  const accent = contrast(v['--accent'], chrome);
+  return { text: Math.round(text * 10) / 10, accent: Math.round(accent * 10) / 10, ok: text >= 4.5 && accent >= 3 };
+}
+
+/** The strongest tint (0–1) that keeps text on the sidebar readable. */
+export function readableIntensity(theme: SpaceTheme, settings: Settings, systemDark: boolean): number {
+  let i = theme.intensity;
+  while (i > 0 && readability({ ...theme, intensity: i }, settings, systemDark).text < 4.5) i = Math.max(0, Math.round((i - 0.05) * 100) / 100);
+  return i;
 }

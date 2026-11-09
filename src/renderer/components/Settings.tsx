@@ -10,6 +10,8 @@ import { bridge, isMac } from '../platform';
 import { Sheet, Field, Segmented, Toggle } from './Sheet';
 import { KiteLogo } from './KiteLogo';
 import { openSpaceEditor } from './Spaces';
+import { LookStudio, setLayout, useEffectiveLook } from './LookStudio';
+import { sleepOtherTabs } from '../commands';
 
 type Section = 'appearance' | 'tabs' | 'keys' | 'links' | 'data' | 'about';
 const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
@@ -49,18 +51,20 @@ export function SettingsPanel({ initial }: { initial?: string }) {
 }
 
 function Slider({ k, label, unit = 'px', step = 1, testId }: { k: keyof typeof LIMITS; label: string; unit?: string; step?: number; testId: string }) {
-  const v = useKite((st) => st.s.settings[k]) as number;
+  const { settings } = useEffectiveLook();
+  const v = settings[k] as number;
   const [lo, hi] = LIMITS[k];
   const shown = k === 'fontScale' ? `${Math.round(v * 100)}%` : `${v}${unit}`;
+  const change = (n: number) => (k === 'radius' || k === 'gap' ? setLayout({ [k]: n }, set) : set({ [k]: n } as Partial<S>));
   return (
     <Field label={label} hint={shown}>
-      <input type="range" className="range" min={lo} max={hi} step={step} value={v} data-testid={testId} onChange={(e) => set({ [k]: Number(e.target.value) } as Partial<S>)} />
+      <input type="range" className="range" min={lo} max={hi} step={step} value={v} data-testid={testId} onChange={(e) => change(Number(e.target.value))} />
     </Field>
   );
 }
 
 function Appearance() {
-  const st = useKite((x) => x.s.settings);
+  const st = useEffectiveLook().settings;
   const space = useKite((x) => activeSpace(x.s));
   const [css, setCss] = useState(st.chromeCss);
   useEffect(() => {
@@ -69,11 +73,13 @@ function Appearance() {
   }, [css]);
   return (
     <>
+      <LookStudio />
+      <h3 className="look-h look-h-layout">Layout and text</h3>
       <div className="settings-card" onClick={() => openSpaceEditor(space.id)} role="button" data-testid="settings-space-theme">
         <span className="import-swatch" style={{ background: `linear-gradient(135deg, ${space.theme.colors[0]}, ${space.theme.colors[1]})` }}>{space.icon}</span>
         <span className="import-space-text">
-          <b>Colors for “{space.name}”</b>
-          <span className="muted">Each Space has its own colors and light/dark mode. Click to change.</span>
+          <b>Name, icon and colours of “{space.name}”</b>
+          <span className="muted">Each Space keeps its own colours and light/dark mode. Click to edit the Space.</span>
         </span>
       </div>
       <div className="field-row">
@@ -81,17 +87,18 @@ function Appearance() {
           <Segmented testId="set-side" value={st.sidebarSide} onChange={(v) => set({ sidebarSide: v })} options={[{ value: 'left', label: <><PanelLeft size={13} /> Left</> }, { value: 'right', label: <><PanelRight size={13} /> Right</> }]} />
         </Field>
         <Field label="Spacing">
-          <Segmented testId="set-density" value={st.density} onChange={(v) => set({ density: v })} options={[{ value: 'compact', label: 'Compact' }, { value: 'comfortable', label: 'Comfortable' }, { value: 'roomy', label: 'Roomy' }]} />
+          <Segmented testId="set-density" value={st.density} onChange={(v) => setLayout({ density: v }, set)} options={[{ value: 'compact', label: 'Compact' }, { value: 'comfortable', label: 'Comfortable' }, { value: 'roomy', label: 'Roomy' }]} />
         </Field>
       </div>
       <Field label="Font">
         <Segmented
           testId="set-font"
           value={st.font}
-          onChange={(v) => set({ font: v })}
+          onChange={(v) => setLayout({ font: v }, set)}
           options={[
             { value: 'figtree', label: <span style={{ fontFamily: 'Figtree' }}>Figtree</span> },
             { value: 'bricolage', label: <span style={{ fontFamily: "'Bricolage Grotesque'" }}>Bricolage</span> },
+            { value: 'inter', label: <span style={{ fontFamily: 'Inter' }}>Inter</span> },
             { value: 'system', label: <span style={{ fontFamily: 'system-ui' }}>System</span> },
             { value: 'mono', label: <span style={{ fontFamily: 'ui-monospace, monospace' }}>Mono</span> },
           ]}
@@ -112,7 +119,7 @@ function Appearance() {
       <Field label="Restyle Kite itself" hint="Advanced: your own CSS for Kite’s window">
         <textarea className="input" spellCheck={false} placeholder={'.sidebar { backdrop-filter: blur(20px); }\n.row[data-active] { border-radius: 4px; }'} value={css} data-testid="set-chrome-css" onChange={(e) => setCss(e.target.value)} />
       </Field>
-      <button className="btn small" data-testid="set-reset-appearance" onClick={() => { act(resetAppearance); setCss(''); toast('Appearance reset'); }}>
+      <button className="btn small" data-testid="set-reset-appearance" onClick={() => { setUi({ lookDraft: null }); act(resetAppearance); setCss(''); toast('Appearance reset'); }}>
         <RotateCcw size={13} /> Reset appearance
       </button>
     </>
@@ -138,6 +145,13 @@ function TabsSection() {
         <select className="input" value={archiveValue(st.littleArchiveAfterMs)} data-testid="set-little-archive" onChange={(e) => set({ littleArchiveAfterMs: e.target.value === 'null' ? null : Number(e.target.value) })}>
           {ARCHIVE_CHOICES.map((c) => <option key={c.label} value={archiveValue(c.ms)}>{c.label}</option>)}
         </select>
+      </Field>
+      <Field label="Memory" hint="Older tabs sleep: their page unloads and reloads when you open them. Playing tabs never sleep.">
+        <span className="look-inline-range">
+          <input type="range" className="range" min={LIMITS.awakeTabs[0]} max={LIMITS.awakeTabs[1]} value={st.awakeTabs} data-testid="set-awake" onChange={(e) => set({ awakeTabs: Number(e.target.value) })} />
+          <b>{st.awakeTabs} tabs awake</b>
+          <button className="btn small" data-testid="set-sleep-now" onClick={(e) => { e.preventDefault(); sleepOtherTabs(); }}>Sleep others now</button>
+        </span>
       </Field>
       <Field label="Search engine">
         <select className="input" value={custom ? 'custom' : st.searchEngine} data-testid="set-engine" onChange={(e) => e.target.value !== 'custom' && set({ searchEngine: e.target.value })}>

@@ -2,6 +2,7 @@
 
 import { DEFAULT_SHORTCUTS, defaultSettings } from './defaults';
 import type { AppState, Settings } from './types';
+import { defaultLook, sanitizeLook, styleById, type StyleId } from './look';
 import { loadState, serialize } from './persistence';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -12,6 +13,7 @@ export const LIMITS = {
   radius: [0, 24],
   gap: [0, 20],
   favoritesColumns: [3, 6],
+  awakeTabs: [3, 30],
 } as const;
 
 export function updateSettings(s: AppState, patch: Partial<Settings>): void {
@@ -21,6 +23,7 @@ export function updateSettings(s: AppState, patch: Partial<Settings>): void {
     const v = Number(next[key]);
     (next as Record<string, unknown>)[key] = Number.isFinite(v) ? clamp(key === 'fontScale' ? v : Math.round(v), lo, hi) : defaultSettings()[key];
   }
+  next.look = sanitizeLook(next.look);
   if (typeof next.searchEngine !== 'string' || !next.searchEngine.includes('%s') || !/^https?:\/\//i.test(next.searchEngine)) next.searchEngine = s.settings.searchEngine;
   s.settings = next;
 }
@@ -28,7 +31,7 @@ export function updateSettings(s: AppState, patch: Partial<Settings>): void {
 /** Appearance back to defaults (keeps shortcuts, archive and search choices). */
 export function resetAppearance(s: AppState): void {
   const d = defaultSettings();
-  const keys: (keyof Settings)[] = ['sidebarSide', 'sidebarWidth', 'density', 'font', 'fontScale', 'radius', 'gap', 'showUrlBar', 'showTabCloseOnHover', 'favoritesColumns', 'reduceMotion', 'chromeCss'];
+  const keys: (keyof Settings)[] = ['sidebarSide', 'sidebarWidth', 'density', 'font', 'fontScale', 'radius', 'gap', 'showUrlBar', 'showTabCloseOnHover', 'favoritesColumns', 'reduceMotion', 'chromeCss', 'look'];
   for (const k of keys) (s.settings as unknown as Record<string, unknown>)[k] = d[k];
 }
 
@@ -115,4 +118,13 @@ export function readBackup(text: string): BackupInfo {
     boosts: state.boosts.length,
     scriptsRemoved,
   };
+}
+
+/**
+ * Pick a visual style: its look and its recommended shape and type come with it
+ * (radius, spacing, density, font). Everything can be fine-tuned afterwards.
+ */
+export function applyStyle(s: AppState, style: StyleId): void {
+  const d = styleById(style).defaults;
+  updateSettings(s, { look: { ...defaultLook(style), accent: s.settings.look.accent }, radius: d.radius, gap: d.gap, density: d.density, font: d.font });
 }

@@ -1,3 +1,4 @@
+import { defaultLook } from './look';
 import type { AppState, Settings, Space, SpaceTheme } from './types';
 import { newId } from './ids';
 
@@ -84,6 +85,7 @@ export const SEARCH_ENGINES: { label: string; template: string }[] = [
 
 export function defaultSettings(): Settings {
   return {
+    look: defaultLook('calm'),
     sidebarSide: 'left',
     sidebarWidth: 264,
     sidebarCollapsed: false,
@@ -95,6 +97,7 @@ export function defaultSettings(): Settings {
     showUrlBar: true,
     showTabCloseOnHover: true,
     favoritesColumns: 4,
+    awakeTabs: 10,
     archiveAfterMs: 12 * HOUR,
     littleArchiveAfterMs: 12 * HOUR,
     searchEngine: SEARCH_ENGINES[0].template,

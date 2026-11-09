@@ -14,6 +14,7 @@ import { onStageDrop } from './dnd';
 import type { AppState } from '@shared/types';
 import { surface } from './surfaces';
 import { bridge, now } from './platform';
+import { sleepAllBut } from '@shared/sleep';
 
 export type OpenWhere = 'current' | 'new' | 'background' | 'peek' | 'little' | 'split';
 
@@ -172,6 +173,55 @@ function activeTabId(): ID | null {
   return ops.activeTab(getS())?.id ?? null;
 }
 
+/** Copy the current page as a Markdown link: [Title](https://…). */
+export async function copyActiveMarkdown(id?: ID) {
+  const t = id ? getS().items[id] : ops.activeTab(getS());
+  if (!t || t.kind !== 'tab') return;
+  const title = ops.displayTitle(t).replace(/([\[\]])/g, '\\$1');
+  const url = t.url.replace(/\)/g, '%29');
+  try {
+    await navigator.clipboard.writeText(`[${title}](${url})`);
+  } catch {
+    /* clipboard may be unavailable in tests */
+  }
+  toast('Copied as Markdown link');
+}
+
+/** Tabs you can see right now (the active tab, or every page of a split). */
+function visibleTabs(): ID[] {
+  const id = activeId();
+  const it = id ? getS().items[id] : null;
+  return !it ? [] : it.kind === 'split' ? it.panes : it.kind === 'tab' ? [it.id] : [];
+}
+
+/** Unload a tab's page to free memory. It reloads when you open it again. */
+export function sleepTab(id: ID) {
+  const u = getUi();
+  if (visibleTabs().includes(id) || u.playing[id] || u.pipped.includes(id)) return toast('This tab is in use, so it stays awake');
+  unload(id);
+  toast('Tab is asleep. It wakes when you open it');
+}
+
+/** Put every tab to sleep except what you are looking at and anything playing. */
+export function sleepOtherTabs() {
+  const u = getUi();
+  const keep = new Set([...visibleTabs(), ...u.pipped, ...Object.keys(u.playing).filter((k) => u.playing[k])]);
+  const n = u.loaded.filter((x) => !keep.has(x)).length;
+  setUi({ loaded: sleepAllBut(u.loaded, (x) => keep.has(x)) });
+  toast(n ? `Put ${n} tab${n === 1 ? '' : 's'} to sleep` : 'No other tabs are awake');
+}
+
+/** Mute or unmute every tab that is playing sound. */
+export function muteAll(mute: boolean) {
+  const u = getUi();
+  const ids = [...new Set([...u.loaded, ...Object.keys(u.playing)])];
+  for (const id of ids) surface(id)?.setMuted(mute);
+  const muted = { ...u.muted };
+  for (const id of ids) muted[id] = mute;
+  setUi({ muted });
+  toast(mute ? 'All tabs muted' : 'All tabs unmuted');
+}
+
 export async function copyActiveUrl() {
   const t = ops.activeTab(getS());
   if (!t) return;
@@ -209,6 +259,10 @@ export const actions: Record<string, () => void> = {
   },
   toggleSidebar: () => act((d) => void (d.settings.sidebarCollapsed = !d.settings.sidebarCollapsed)),
   copyUrl: () => void copyActiveUrl(),
+  copyMarkdown: () => void copyActiveMarkdown(),
+  sleepOthers: () => sleepOtherTabs(),
+  muteAll: () => muteAll(true),
+  unmuteAll: () => muteAll(false),
   reload: () => surface(activeTabId())?.reload(),
   back: () => surface(activeTabId())?.back(),
   forward: () => surface(activeTabId())?.forward(),

@@ -25,6 +25,8 @@ export const ItemRow = memo(function ItemRow({ id, list, depth }: Props) {
   const item = useKite((st) => st.s.items[id]);
   const active = useKite((st) => st.s.activeBySpace[st.s.activeSpaceId] === id);
   const loading = useKite((st) => !!st.ui.loading[id]);
+  // A tab whose page was unloaded to save memory (it reloads when opened).
+  const asleep = useKite((st) => st.s.items[id]?.kind === 'tab' && !st.ui.loaded.includes(id) && st.s.activeBySpace[st.s.activeSpaceId] !== id);
   const renaming = useKite((st) => st.ui.renaming === id);
   const closeOnHover = useKite((st) => st.s.settings.showTabCloseOnHover);
   const sound = useKite((st) => {
@@ -54,6 +56,7 @@ export const ItemRow = memo(function ItemRow({ id, list, depth }: Props) {
       aria-selected={active}
       data-active={active || undefined}
       data-kind={item.kind}
+      data-asleep={asleep || undefined}
       data-drop={drag.dropHint ?? undefined}
       data-testid={`row-${id}`}
       data-title={title}
@@ -62,7 +65,7 @@ export const ItemRow = memo(function ItemRow({ id, list, depth }: Props) {
       onAuxClick={(e) => e.button === 1 && closeItemCmd(id)}
       onDoubleClick={() => setUi({ renaming: id })}
       onContextMenu={(e) => openMenu(e, itemMenu(id))}
-      title={item.kind === 'tab' ? `${title}\n${item.url}` : title}
+      title={item.kind === 'tab' ? `${title}\n${item.url}${asleep ? '\nAsleep to save memory. Opens instantly when you click.' : ''}` : title}
     >
       <RowIcon item={item} />
       {renaming ? (

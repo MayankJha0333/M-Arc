@@ -4,8 +4,8 @@ import * as ops from '@shared/ops';
 import { locate } from '@shared/tree';
 import type { ID } from '@shared/types';
 import type { ContextMenuItem } from './store';
-import { act, getS, setUi } from './store';
-import { closeItemCmd, selectItem, copyActiveUrl, navigateTab, newFolderCmd, deleteFolderCmd, splitWithCmd } from './commands';
+import { act, getS, getUi, setUi } from './store';
+import { closeItemCmd, selectItem, copyActiveUrl, copyActiveMarkdown, sleepTab, navigateTab, newFolderCmd, deleteFolderCmd, splitWithCmd } from './commands';
 import { setOrientation } from '@shared/split';
 import { ungroupFolder } from '@shared/folders';
 import { getSpace } from '@shared/tree';
@@ -39,6 +39,8 @@ export function itemMenu(id: ID): ContextMenuItem[] {
   if (it.kind === 'tab') {
     items.push(
       { label: 'Copy URL', testId: 'menu-copy-url', onSelect: () => { selectItem(id); void copyActiveUrl(); } },
+      { label: 'Copy as Markdown Link', testId: 'menu-copy-md', onSelect: () => void copyActiveMarkdown(id) },
+      ...(getUi().loaded.includes(id) && activeNow !== id ? [{ label: 'Put to Sleep', testId: 'menu-sleep', onSelect: () => sleepTab(id) }] : []),
       { label: 'Duplicate', testId: 'menu-duplicate', onSelect: () => { const n = act((d) => ops.duplicateTab(d, id, now())); if (n) selectItem(n); } },
     );
   }

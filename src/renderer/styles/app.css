@@ -58,7 +58,7 @@ kbd {
   font-family: var(--font);
   font-size: calc(13.5px * var(--scale));
   color: var(--ink);
-  background: linear-gradient(165deg, var(--chrome-a) 0%, var(--chrome-mid) 55%, var(--chrome-b) 100%);
+  background: var(--backdrop, linear-gradient(165deg, var(--chrome-a) 0%, var(--chrome-mid) 55%, var(--chrome-b) 100%));
   transition: background 0.5s ease;
 }
 
@@ -94,7 +94,7 @@ kbd {
   flex-direction: column;
   min-width: 0;
   padding: 0 6px 6px 8px;
-  transition: margin 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s;
+  transition: margin 0.28s var(--ease, cubic-bezier(0.2, 0.8, 0.2, 1)), transform 0.28s var(--ease, cubic-bezier(0.2, 0.8, 0.2, 1)), opacity 0.2s;
 }
 
 .app[data-side='right'] .sidebar {
@@ -835,7 +835,7 @@ kbd {
   border-radius: 12px;
   background: var(--overlay);
   box-shadow: var(--shadow);
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(var(--blur, 20px)) saturate(1.3);
 }
 
 .find-bar input {
@@ -883,8 +883,8 @@ kbd {
   border-radius: 18px;
   background: var(--overlay);
   box-shadow: 0 0 0 1px var(--line), 0 30px 80px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(24px) saturate(1.3);
-  animation: pop-in 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+  backdrop-filter: blur(var(--blur, 20px)) saturate(1.3);
+  animation: pop-in 0.16s var(--ease, cubic-bezier(0.2, 0.8, 0.2, 1));
 }
 
 .cb-input-row {
@@ -929,7 +929,7 @@ kbd {
   border-radius: 12px;
   background: var(--overlay);
   box-shadow: 0 0 0 1px var(--line), 0 16px 40px rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(20px) saturate(1.3);
+  backdrop-filter: blur(var(--blur, 20px)) saturate(1.3);
   animation: pop-in 0.1s ease-out;
 }
 
@@ -1088,11 +1088,11 @@ body.dragging .surface {
 }
 
 .space-pane[data-dir='next'] {
-  animation: slide-next 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: slide-next 0.26s var(--ease, cubic-bezier(0.2, 0.8, 0.2, 1));
 }
 
 .space-pane[data-dir='prev'] {
-  animation: slide-prev 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: slide-prev 0.26s var(--ease, cubic-bezier(0.2, 0.8, 0.2, 1));
 }
 
 @keyframes slide-next {
@@ -1145,8 +1145,8 @@ body.dragging .surface {
   border-radius: 20px;
   background: var(--overlay);
   box-shadow: 0 0 0 1px var(--line), 0 30px 80px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(24px) saturate(1.3);
-  animation: pop-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+  backdrop-filter: blur(var(--blur, 20px)) saturate(1.3);
+  animation: pop-in 0.18s var(--ease, cubic-bezier(0.2, 0.8, 0.2, 1));
   user-select: text;
 }
 
@@ -1366,7 +1366,7 @@ select.input {
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 0.18s var(--ease, cubic-bezier(0.2, 0.8, 0.2, 1));
 }
 
 .toggle[data-on] .toggle-knob {
@@ -3235,4 +3235,531 @@ html.pip-frame-doc #root {
     transition: none !important;
     animation: none !important;
   }
+}
+
+
+/* ---- Styles (see shared/look.ts) -------------------------------------------- */
+
+/* Glass: frosted, luminous edges, popups float over a colour field. */
+.app[data-style='glass'] .url-pill {
+  background: var(--active);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.app[data-style='glass'] .card {
+  box-shadow: var(--shadow), 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+.app[data-style='glass'][data-theme='dark'] .card {
+  box-shadow: var(--shadow), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.app[data-style='glass'] .cb,
+.app[data-style='glass'] .menu,
+.app[data-style='glass'] .sheet {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45), 0 30px 80px rgba(20, 30, 60, 0.25);
+}
+.app[data-style='glass'][data-theme='dark'] .cb,
+.app[data-style='glass'][data-theme='dark'] .menu,
+.app[data-style='glass'][data-theme='dark'] .sheet {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1), 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+
+/* Paper: flat and crisp — lines, not shadows; the selected tab gets an accent bar. */
+.app[data-style='paper'] .card {
+  box-shadow: 0 0 0 1px var(--line);
+}
+.app[data-style='paper'] .url-pill {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.app[data-style='paper'] .row[data-active] {
+  border-radius: 4px;
+}
+.app[data-style='paper'] .sb-divider-line {
+  height: 1px;
+  background: var(--line);
+}
+
+/* Focus: quiet greys; the accent shows only on what's selected. */
+.app[data-style='mono'] .row[data-active] .row-title {
+  font-weight: 600;
+}
+.app[data-style='mono'] .url-pill {
+  background: var(--hover);
+}
+
+/* Studio: deep and glowing; the page sits in a soft halo of the accent. */
+.app[data-style='studio'] .card {
+  box-shadow: var(--shadow), 0 0 0 1px var(--accent-soft), 0 20px 80px var(--accent-soft);
+}
+.app[data-style='studio'] .url-pill {
+  background: var(--hover);
+  box-shadow: inset 0 0 0 1px var(--accent-soft);
+}
+
+/* ---- Appearance studio (Settings → Appearance) -------------------------------- */
+
+/* While previewing a look, let the window show through around Settings. */
+.app[data-previewing] .sheet-scrim {
+  background: transparent;
+  transition: background 0.2s;
+}
+
+.look {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.look-bar {
+  position: sticky;
+  top: -8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 8px 6px 12px;
+  border-radius: 12px;
+  background: var(--hover);
+  font-size: calc(12.5px * var(--scale));
+  transition: background var(--dur, 0.2s) var(--ease), box-shadow var(--dur, 0.2s) var(--ease);
+}
+
+.look-bar[data-dirty] {
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--accent-soft), 0 8px 24px rgba(0, 0, 0, 0.12);
+  animation: pop-in 0.18s var(--ease);
+}
+
+.look-bar-text {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+}
+
+.look-bar-text.muted {
+  font-weight: 500;
+}
+
+.look-bar-text svg {
+  color: var(--accent);
+}
+
+.look-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.look-h {
+  margin: 0;
+  font-size: calc(13px * var(--scale));
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.look-h .muted {
+  font-weight: 500;
+}
+
+.look-h-layout {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.look-styles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.look-style {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  padding: 8px 8px 10px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  box-shadow: 0 0 0 1px var(--line);
+  transition: box-shadow 0.16s var(--ease), transform 0.16s var(--ease), background 0.16s;
+}
+
+.look-style:hover {
+  background: var(--hover);
+  transform: translateY(-1px);
+}
+
+.look-style[data-on] {
+  background: var(--hover);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.look-style:focus-visible,
+.look-palette:focus-visible,
+.look-accent:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.look-style-name {
+  margin-top: 6px;
+  font-weight: 700;
+}
+
+.look-style-tag {
+  color: var(--ink-2);
+  font-size: calc(11.5px * var(--scale));
+  line-height: 1.35;
+}
+
+.look-style-mood {
+  color: var(--ink-3);
+  font-size: calc(11px * var(--scale));
+}
+
+/* The tiny browser drawn in each style. Uses the same variables as the real window. */
+.mini {
+  display: grid;
+  grid-template-columns: 34% 1fr;
+  gap: calc(var(--gap) * 0.4);
+  height: 92px;
+  padding: calc(var(--gap) * 0.4 + 2px);
+  border-radius: 10px;
+  background: var(--backdrop);
+  overflow: hidden;
+  font-family: var(--font);
+}
+
+.mini-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mini-dots {
+  display: flex;
+  gap: 2px;
+  height: 5px;
+}
+
+.mini-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+
+.mini-url {
+  height: 9px;
+  border-radius: calc(var(--radius) * 0.3);
+  background: var(--hover);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.mini-favs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+}
+
+.mini-favs i {
+  height: 9px;
+  border-radius: calc(var(--radius) * 0.25);
+  background: var(--hover);
+}
+
+.mini-row {
+  height: 7px;
+  border-radius: calc(var(--radius) * 0.25);
+  background: linear-gradient(90deg, var(--ink-3) 0 6px, transparent 6px 9px, var(--ink-3) 9px 75%, transparent 75%);
+  opacity: 0.7;
+}
+
+.mini-row.short {
+  width: 60%;
+}
+
+.mini-row[data-on] {
+  height: 9px;
+  background: var(--active);
+  box-shadow: var(--active-shadow);
+  opacity: 1;
+}
+
+.mini-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  border-radius: calc(var(--radius) * 0.5);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.mini-line {
+  width: 60%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--ink-3);
+  opacity: 0.6;
+}
+
+.mini-line.wide {
+  width: 85%;
+  height: 6px;
+  background: var(--ink-2);
+}
+
+.mini-block {
+  flex: 1;
+  border-radius: calc(var(--radius) * 0.3);
+  background: linear-gradient(135deg, var(--tint-1), var(--tint-2));
+  opacity: 0.55;
+}
+
+.mini-btn {
+  width: 30%;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--accent);
+}
+
+.look-palettes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 6px;
+}
+
+.look-palette {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 8px 0 5px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: calc(12px * var(--scale));
+  font-weight: 600;
+  box-shadow: 0 0 0 1px var(--line);
+  transition: background 0.12s, box-shadow 0.12s;
+}
+
+.look-palette:hover {
+  background: var(--hover);
+}
+
+.look-palette[data-on] {
+  color: var(--ink);
+  background: var(--hover);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.look-palette-sw {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.look-custom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.look-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.look-color input[type='color'] {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+}
+
+.look-color input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.look-color input[type='color']::-webkit-color-swatch {
+  border: 0;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.look-hex {
+  width: 92px;
+  height: 30px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: calc(12px * var(--scale));
+  text-transform: lowercase;
+}
+
+.look-color[data-compact] .look-hex {
+  width: 84px;
+}
+
+.look-accents {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.look-accent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-2);
+  font-weight: 600;
+  font-size: calc(12px * var(--scale));
+  transition: transform 0.12s var(--ease);
+}
+
+.look-accent.auto {
+  padding: 0 10px 0 4px;
+  border-radius: 15px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.look-accent span {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+.look-accent:hover {
+  transform: scale(1.08);
+}
+
+.look-accent[data-on] {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.look-all {
+  align-self: end;
+  padding-bottom: 4px;
+}
+
+.look-check {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--hover);
+}
+
+.look-check p {
+  margin: 4px 0 0;
+  font-size: calc(12px * var(--scale));
+}
+
+.look-check:not([data-ok]) {
+  box-shadow: inset 0 0 0 1px rgba(224, 72, 58, 0.45);
+}
+
+.look-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+  font-weight: 600;
+  font-size: calc(12px * var(--scale));
+}
+
+.look-share {
+  display: flex;
+  gap: 8px;
+}
+
+.look-share .input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: calc(11.5px * var(--scale));
+}
+
+.look-error {
+  margin: 0;
+  color: #d0453a;
+  font-size: calc(12px * var(--scale));
+}
+
+.look .muted {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .look-share {
+    flex-wrap: wrap;
+  }
+}
+
+.app[data-motion='reduced'] .look-style,
+.app[data-motion='reduced'] .look-bar {
+  transition: none;
+  animation: none;
+}
+
+/* Sleeping tabs: their page is unloaded to save memory. */
+.row[data-asleep] .row-icon,
+.row[data-asleep] .site-icon {
+  opacity: 0.5;
+  filter: saturate(0.3);
+  transition: opacity 0.2s, filter 0.2s;
+}
+
+.row[data-asleep] .row-title {
+  color: var(--ink-2);
+}
+
+.row[data-asleep]:hover .row-icon,
+.row[data-asleep]:hover .site-icon {
+  opacity: 0.85;
+  filter: none;
+}
+
+.look-inline-range {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.look-inline-range .range {
+  flex: 1;
+}
+
+.look-inline-range b {
+  white-space: nowrap;
+  font-size: calc(12.5px * var(--scale));
+}
+
+[data-theme='dark'] .look-accent:not(.auto) span {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
 }

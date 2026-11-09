@@ -6,6 +6,7 @@ import { createInitialState } from '@shared/defaults';
 import { serialize } from '@shared/persistence';
 import type { AppState, ID } from '@shared/types';
 import { bridge } from './platform';
+import { keepAwake } from '@shared/sleep';
 
 export type Panel = 'settings' | 'archive' | 'boosts' | 'boost' | 'routing' | 'import' | 'space' | 'shortcuts' | null;
 
@@ -48,6 +49,8 @@ export interface UiState {
   muted: Record<ID, boolean>;
   /** Tabs whose video Kite popped out automatically. */
   pipped: ID[];
+  /** A look being previewed in Settings → Appearance (not saved until Apply). */
+  lookDraft: import('@shared/look').LookDraft | null;
 }
 
 interface Store {
@@ -80,6 +83,7 @@ export const useKite = create<Store>((set, get) => ({
     playing: {},
     muted: {},
     pipped: [],
+    lookDraft: null,
   },
   act(fn) {
     let out: ReturnType<typeof fn> | undefined;
@@ -112,8 +116,12 @@ export function toast(text: string, actionLabel?: string, action?: () => void, m
 /** Keep a tab's page alive (least-recently-used ones get unloaded). */
 export function markLoaded(id: ID) {
   setUi((u) => {
-    const rest = u.loaded.filter((x) => x !== id);
-    return { loaded: [...rest, id].slice(-MAX_LOADED) };
+    const limit = getS().settings.awakeTabs ?? MAX_LOADED;
+    // Never put to sleep a tab that is playing, or whose video is floating.
+    const s = getS();
+    const shown = s.items[s.activeBySpace[s.activeSpaceId] ?? ''];
+    const visible = shown?.kind === 'split' ? shown.panes : [];
+    return { loaded: keepAwake(u.loaded, id, limit, (x) => !!u.playing[x] || u.pipped.includes(x) || visible.includes(x)) };
   });
 }
 

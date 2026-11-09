@@ -1,3 +1,4 @@
+import { sanitizeLook } from './look';
 // Loading saved state safely: fill in anything missing, drop anything broken.
 
 import { createInitialState, defaultSettings, DEFAULT_SHORTCUTS, defaultTheme, STATE_VERSION } from './defaults';
@@ -29,6 +30,7 @@ export function loadState(raw: unknown): AppState {
     closed: Array.isArray(s.closed) ? s.closed : [],
   };
   state.settings.shortcuts = { ...DEFAULT_SHORTCUTS, ...(state.settings.shortcuts ?? {}) };
+  state.settings.look = sanitizeLook(state.settings.look);
   state.spaces = state.spaces.map((sp, i) => ({
     ...sp,
     name: sp.name || `Space ${i + 1}`,
