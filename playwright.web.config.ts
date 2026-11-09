@@ -10,6 +10,7 @@ export default defineConfig({
     baseURL: 'http://localhost:5174/',
     viewport: { width: 1280, height: 800 },
     trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
   },
   webServer: {
     command: 'npx vite --port 5174 --strictPort',

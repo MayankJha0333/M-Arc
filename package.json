@@ -20,7 +20,9 @@
     "test:all": "npm run typecheck && npm test && npm run test:e2e && npm run test:electron",
     "dist": "npm run build && electron-builder --mac",
     "dist:dir": "npm run build && electron-builder --dir",
-    "icon": "node scripts/make-icon.mjs"
+    "icon": "node scripts/make-icon.mjs",
+    "test:report": "node scripts/test-report.mjs",
+    "test:report:quick": "node scripts/test-report.mjs --quick"
   },
   "dependencies": {
     "koffi": "^2.16.3"

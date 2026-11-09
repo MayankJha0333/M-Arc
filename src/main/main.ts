@@ -23,7 +23,7 @@ import { Storage } from './storage';
 import { findAction, toAccelerator } from '../shared/shortcuts';
 import { hostOf } from '../shared/url';
 import type { OpenRequest } from '../shared/ipc';
-import { findPipWindow, ignoreMouseOnPipWindow, keepPipWindowIgnoringMouse, roundPipWindowIfSafe, floatPipWindowsSoon, frameStep, installVideoPanelHooks, setPipWindowFrame } from './macWindows';
+import { findPipWindow, ignoreMouseOnPipWindow, inspectPipWindow, keepPipWindowIgnoringMouse, roundPipWindowIfSafe, floatPipWindowsSoon, frameStep, installVideoPanelHooks, setPipWindowFrame } from './macWindows';
 import { createPipFrame } from './pipFrame';
 import { PIP_FRAME_ACTIONS, RESIZE_EDGES, type PipFrameAction, type ResizeEdge } from '../shared/pipFrame';
 import { isPipMediaCommand, isThumb, MEDIA_STATE_SCRIPT, pipMediaScript, PIP_REENTER_SCRIPT, PIP_THUMB_SCRIPT, PIP_TO_MINI_SCRIPT } from '../shared/pip';
@@ -320,7 +320,17 @@ async function pipFrameAction(action: PipFrameAction) {
 }
 
 /** Tests only: reach the frame window without a real floating video. */
-const testHooks = process.env.KITE_TEST ? { frameActions: [] as string[], pipFrame } : null;
+const testHooks = process.env.KITE_TEST
+  ? {
+      frameActions: [] as string[],
+      pipFrame,
+      /** macOS: the real floating video window, as macOS sees it. */
+      inspectPip: () => inspectPipWindow(debugLog),
+      /** Which tab's video is floating (or in the mini player). */
+      currentPip: () => (currentPip ? { tabId: currentPip.tabId } : null),
+      isMac,
+    }
+  : null;
 if (testHooks) (globalThis as Record<string, unknown>).__kiteTest = testHooks;
 
 // A page could try to open endless windows; allow a few per few seconds.

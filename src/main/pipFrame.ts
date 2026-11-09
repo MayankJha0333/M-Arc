@@ -59,6 +59,8 @@ export function createPipFrame(deps: PipFrameDeps) {
   let last: PipFrameState | null = null;
 
   const mainScreenHeight = () => screen.getPrimaryDisplay().bounds.height;
+  /** Where the mouse is (tests swap in a pretend mouse to drive the same drag code). */
+  let cursor = () => screen.getCursorScreenPoint();
 
   function ensureWindow(): BrowserWindow {
     if (win && !win.isDestroyed()) return win;
@@ -236,12 +238,12 @@ export function createPipFrame(deps: PipFrameDeps) {
     const maxWidth = Math.round(screen.getDisplayMatching(start).workArea.width * 0.9);
     drag = {
       kind,
-      from: screen.getCursorScreenPoint(),
+      from: cursor(),
       start,
       stopAt: Date.now() + 20_000, // never get stuck if the mouse-up is missed
       timer: setInterval(() => {
         if (!drag || Date.now() > drag.stopAt) return endDrag();
-        const at = screen.getCursorScreenPoint();
+        const at = cursor();
         const next = drag.kind === 'move' ? dragTo(drag.start, drag.from, at) : resizeTo(drag.start, drag.kind, drag.from, at, maxWidth);
         if (same(next, pipBounds)) return;
         pipBounds = next;
@@ -268,6 +270,25 @@ export function createPipFrame(deps: PipFrameDeps) {
     refresh: () => void pollMedia(),
     mode: () => mode,
     isFrameWindow: (w: BrowserWindow | null) => !!w && w === win,
+    /**
+     * Tests: drag (or resize from an edge) by dx/dy with a pretend mouse, through the very
+     * same code as a real drag (it moves the real video window on macOS). Resolves with the
+     * video window's bounds afterwards.
+     */
+    async dragForTest(kind: 'move' | ResizeEdge, dx: number, dy: number): Promise<Rect | null> {
+      const real = cursor;
+      const from = real();
+      let t = 0;
+      cursor = () => ({ x: Math.round(from.x + (dx * t) / 10), y: Math.round(from.y + (dy * t) / 10) });
+      startDrag(kind);
+      for (t = 1; t <= 10; t++) await new Promise((r) => setTimeout(r, 40));
+      await new Promise((r) => setTimeout(r, 80));
+      endDrag();
+      cursor = real;
+      return pipBounds;
+    },
+    /** Tests: the controls window's bounds and the layout it shows. */
+    frameInfo: () => ({ mode, bounds: win && !win.isDestroyed() && win.isVisible() ? win.getBounds() : null, pipBounds }),
     /** Tests: show the controls at these screen bounds without a real video window. */
     showForTest(b: Rect) {
       const w = ensureWindow();

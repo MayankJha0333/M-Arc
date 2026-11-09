@@ -411,3 +411,29 @@ export function keepPipWindowIgnoringMouse(log: Log, addr: number): boolean {
   }
 }
 
+
+/** Tests: everything about the floating video window that macOS knows. null if there's none. */
+export function inspectPipWindow(log: Log) {
+  const o = load(log);
+  if (!o) return null;
+  try {
+    const ours = ownWindows(o);
+    const w = listWindows(o).find((x) => isPipWindow(x, ours));
+    if (!w) return { found: false, otherWindows: listWindows(o).filter((x) => !ours.has(x.addr) && x.visible).map((x) => `${x.className}@${x.level}`) };
+    const selNonAct = o.sel('_isNonactivatingPanel');
+    return {
+      found: true,
+      className: w.className,
+      level: w.level,
+      styleMask: w.styleMask,
+      behavior: w.behavior,
+      isNonactivatingPanel: o.sendBoolArg(w.addr, o.sel('respondsToSelector:'), selNonAct) ? o.sendBool(w.addr, selNonAct) : null,
+      ignoresMouse: o.sendBool(w.addr, o.sel('ignoresMouseEvents')),
+      hasShadow: o.sendBool(w.addr, o.sel('hasShadow')),
+      isOpaque: o.sendBool(w.addr, o.sel('isOpaque')),
+      frame: o.frame(w.addr),
+    };
+  } catch (err) {
+    return { found: false, error: (err as Error).message };
+  }
+}

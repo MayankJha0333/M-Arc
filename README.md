@@ -86,12 +86,35 @@ browser profiles, extensions.
 
 ## Tests
 
+**One command, on macOS, Linux or Windows:**
+
 ```bash
-npm test               # 216 logic tests (Vitest)
-npm run test:e2e       # 154 UI tests (Playwright, simulated pages)
-npm run test:electron  # 23 tests in real Electron, incl. 5 security attack tests and a real playing video
-npm run test:all       # everything + type check
+npm run test:report         # everything this computer can check (≈5 min)
+npm run test:report:quick   # same, without the slower UI tests (≈1 min)
 ```
+
+It writes `test-report/`:
+
+| File | What's in it |
+|---|---|
+| `report.html` | Open in a browser: ✅/❌ per feature, every failure with its reason, screenshots |
+| `summary.md` | The same, as short text |
+| `results.json` | Everything, for tools |
+| `logs/` | Full output of each step, and Kite's own debug log |
+
+What runs:
+
+| Check | Where |
+|---|---|
+| Type check, 216 logic tests | every system |
+| 154 UI tests (simulated pages) | every system |
+| 23 tests in the real app (Electron), incl. security attacks and a real playing video | every system |
+| Floating video on the real desktop: switches to another app for real, checks the window is a panel over full-screen apps, ignores the mouse, Kite's controls cover it, play/pause, drag and resize (no crash), mini player, show video, back, close, crash reports | **macOS only** — don't touch the mouse for about a minute |
+
+On macOS, allow **Screen Recording** for your terminal (System Settings → Privacy & Security) to get screenshots of the floating video in the report.
+
+**On every push to GitHub** the same command runs on macOS, Linux and Windows
+(`.github/workflows/test.yml`); each system's report is attached to the run.
 
 The UI tests run the app in a normal browser with simulated web pages that execute
 the **same** injected scripts as the real app (link catcher, Boosts, zap picker).
