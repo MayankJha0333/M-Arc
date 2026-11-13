@@ -8,7 +8,7 @@ import type { AppState, ID } from '@shared/types';
 import { bridge } from './platform';
 import { keepAwake } from '@shared/sleep';
 
-export type Panel = 'settings' | 'archive' | 'boosts' | 'boost' | 'routing' | 'import' | 'space' | 'shortcuts' | null;
+export type Panel = 'settings' | 'archive' | 'boosts' | 'boost' | 'routing' | 'import' | 'space' | 'shortcuts' | 'downloads' | 'extensions' | null;
 
 export interface Toast {
   id: number;
@@ -51,6 +51,14 @@ export interface UiState {
   pipped: ID[];
   /** A look being previewed in Settings → Appearance (not saved until Apply). */
   lookDraft: import('@shared/look').LookDraft | null;
+  downloads: import('@shared/downloads').DownloadEntry[];
+  /** Ads and trackers blocked on each tab's current page. */
+  blocked: Record<ID, number>;
+  /** Tabs whose page failed to load, and why. */
+  loadError: Record<ID, { code: number; desc: string; url: string } | undefined>;
+  /** The "about this site" popover under the address bar. */
+  siteInfo: boolean;
+  fullscreen: boolean;
 }
 
 interface Store {
@@ -84,6 +92,11 @@ export const useKite = create<Store>((set, get) => ({
     muted: {},
     pipped: [],
     lookDraft: null,
+    downloads: [],
+    blocked: {},
+    loadError: {},
+    siteInfo: false,
+    fullscreen: false,
   },
   act(fn) {
     let out: ReturnType<typeof fn> | undefined;

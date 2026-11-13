@@ -13,6 +13,44 @@ export interface LittleInit {
   windowId: number;
 }
 
+/** The settings the main process needs to know about. */
+export interface Prefs {
+  shields: import('./shields').Shields;
+  httpsOnly: boolean;
+  sendGpc: boolean;
+  askWhereToSave: boolean;
+}
+
+export interface ShieldsStatus {
+  /** 'builtin' = the small list inside Kite; 'full' = the downloaded lists. */
+  source: 'builtin' | 'full';
+  updatedAt: number;
+  updating: boolean;
+  error?: string;
+}
+
+export interface SitePermission {
+  site: string;
+  permission: string;
+  /** e.g. "use your camera or microphone". */
+  label: string;
+  allowed: boolean;
+}
+
+/** An answer that may be a readable error instead. */
+export type Result<T> = { value: T; error?: undefined } | { error: string; value?: undefined };
+
+export type DownloadAction = 'pause' | 'resume' | 'cancel' | 'open' | 'reveal' | 'remove' | 'clear';
+export interface ClearWhat {
+  cookies: boolean;
+  cache: boolean;
+  storage: boolean;
+}
+
+type DownloadEntry = import('./downloads').DownloadEntry;
+type ExtensionInfo = import('./extensions').ExtensionInfo;
+type ExtensionPreview = import('./extensions').ExtensionPreview;
+
 export interface KiteBridge {
   isElectron: true;
   platform: string;
@@ -63,4 +101,51 @@ export interface KiteBridge {
   setDefaultBrowser(): Promise<boolean>;
   isDefaultBrowser(): Promise<boolean>;
   exportFile(name: string, text: string): Promise<boolean>;
+
+  // ---- Window ----
+  /** macOS: show, hide or move the window's close/minimise/zoom buttons so they sit in the sidebar. */
+  setWindowButtons(v: { visible: boolean; x: number; y: number }): void;
+  onWindowState(cb: (v: { fullscreen: boolean }) => void): () => void;
+
+  // ---- Shields, privacy and security ----
+  setPrefs(p: Prefs): void;
+  shieldsStatus(): Promise<ShieldsStatus>;
+  /** Download the filter lists again now. */
+  refreshShields(): Promise<ShieldsStatus>;
+  onShieldsStatus(cb: (v: ShieldsStatus) => void): () => void;
+  /** How many requests were blocked on a tab's page. */
+  onShieldsCount(cb: (v: { tabId: string; count: number }) => void): () => void;
+  /** Open this host over http although HTTPS-only is on (until Kite quits). */
+  allowHttp(host: string): void;
+  permissions(): Promise<SitePermission[]>;
+  onPermissions(cb: (v: SitePermission[]) => void): () => void;
+  /** Forget remembered answers: one, a whole site's, or (no arguments) all. */
+  forgetPermission(site?: string, permission?: string): void;
+  /** Erase cookies, cache and/or site storage: for one site, or everything. */
+  clearData(what: ClearWhat, site?: string): Promise<void>;
+
+  // ---- Downloads ----
+  downloads(): Promise<DownloadEntry[]>;
+  onDownloads(cb: (v: DownloadEntry[]) => void): () => void;
+  onDownloadDone(cb: (v: DownloadEntry) => void): () => void;
+  /** Resolves to a readable problem, or null. */
+  downloadAction(action: DownloadAction, id?: string): Promise<string | null>;
+  /** Videos, sounds and streams the page has loaded. */
+  pageMedia(webContentsId: number): Promise<import('./downloads').MediaItem[]>;
+  downloadMedia(webContentsId: number, url: string): void;
+  /** Quality levels of a stream (empty = just one). */
+  hlsVariants(webContentsId: number, url: string): Promise<Result<import('./downloads').HlsVariant[]>>;
+  downloadHls(webContentsId: number, url: string, title: string): void;
+
+  // ---- Chrome extensions ----
+  extensions(): Promise<ExtensionInfo[]>;
+  onExtensions(cb: (v: ExtensionInfo[]) => void): () => void;
+  /** Choose an unpacked folder or a .crx/.zip file. Null = cancelled. Nothing is installed until confirmed. */
+  extensionPick(kind: 'folder' | 'file'): Promise<Result<ExtensionPreview | null>>;
+  extensionFromStore(input: string): Promise<Result<ExtensionPreview>>;
+  extensionConfirm(token: string): Promise<Result<true>>;
+  extensionCancel(token: string): void;
+  extensionEnable(id: string, enabled: boolean): Promise<void>;
+  extensionRemove(id: string): Promise<void>;
+  extensionOpen(id: string, which: 'popup' | 'options'): Promise<boolean>;
 }

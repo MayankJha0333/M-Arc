@@ -1,11 +1,11 @@
-import { ArrowLeft, ArrowRight, RotateCw, PanelLeft, Plus, Lock, Search, Settings2, Archive, Sparkles, Wand2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, RotateCw, PanelLeft, Plus, Search, ShieldCheck, Settings2, Archive, Sparkles, Wand2 } from 'lucide-react';
 import { boostsFor } from '@shared/boosts';
 import * as ops from '@shared/ops';
 import { displayUrl } from '@shared/url';
 import { activeSpace } from '@shared/tree';
 import { act, setUi, useKite } from '../store';
 import { actions } from '../commands';
-import { isElectron, isMac } from '../platform';
+import { desktopChrome, isMac } from '../platform';
 import { ItemRow } from './ItemRow';
 import { Favorites } from './Favorites';
 import { SpaceBar, SpaceHeader, useSpaceSwipe } from './Spaces';
@@ -13,14 +13,17 @@ import { useRef } from 'react';
 import { formatShortcut } from '@shared/shortcuts';
 import { openMenu } from './ContextMenu';
 import { DropZone } from '../dnd';
+import { SecurityIcon, SiteInfo, useSecurity } from './SiteInfo';
+import { DownloadsButton } from './Downloads';
 
 export function Sidebar() {
-  const side = useKite((st) => st.s.settings.sidebarSide);
-  const showUrl = useKite((st) => st.s.settings.showUrlBar);
+    const showUrl = useKite((st) => st.s.settings.showUrlBar);
   const space = useKite((st) => activeSpace(st.s));
   const shortcuts = useKite((st) => st.s.settings.shortcuts);
   const width = useKite((st) => st.s.settings.sidebarWidth);
-  const needsLightsGap = isElectron && isMac && side === 'left';
+  // Room for the window buttons (macOS), which sit in the sidebar's corner on either side. None in full screen.
+  const fullscreen = useKite((st) => st.ui.fullscreen);
+  const needsLightsGap = desktopChrome && isMac && !fullscreen;
   const onWheel = useSpaceSwipe();
   const spaceIndex = useKite((st) => st.s.spaces.findIndex((x) => x.id === st.s.activeSpaceId));
   const lastIndex = useRef(spaceIndex);
@@ -39,6 +42,7 @@ export function Sidebar() {
       </div>
 
       {showUrl && <UrlPill />}
+      <SiteInfo />
 
       <div className="sb-scroll" data-testid="sb-scroll" onWheel={onWheel}>
         <Favorites />
@@ -82,6 +86,7 @@ export function Sidebar() {
         <IconBtn label="Archive" testId="btn-archive" onClick={() => actions.archivePage?.()}>
           <Archive size={16} />
         </IconBtn>
+        <DownloadsButton onClick={actions.downloadsPanel} />
         <SpaceBar />
         <IconBtn label="Settings" testId="btn-settings" onClick={actions.settings}>
           <Settings2 size={16} />
@@ -113,7 +118,8 @@ function NavButtons() {
 function UrlPill() {
   const tab = useKite((st) => ops.activeTab(st.s));
   const boosted = useKite((st) => (tab ? boostsFor(st.s, tab.url).length > 0 : false));
-  const secure = tab?.url.startsWith('https:');
+  const { level } = useSecurity();
+  const blocked = useKite((st) => (tab ? st.ui.blocked[tab.id] ?? 0 : 0));
   return (
     <button
       className="url-pill"
@@ -122,8 +128,30 @@ function UrlPill() {
       onContextMenu={(e) => tab && openMenu(e, [{ label: 'Copy URL', onSelect: actions.copyUrl }])}
       title={tab?.url ?? 'Search or enter address'}
     >
-      {tab ? secure ? <Lock size={12} className="url-lock" /> : <Search size={12} className="url-lock" /> : <Search size={12} className="url-lock" />}
+      {tab ? (
+        <span
+          className="url-sec"
+          role="button"
+          aria-label="About this site"
+          title="About this site"
+          data-level={level}
+          data-testid="url-security"
+          onClick={(e) => {
+            e.stopPropagation();
+            actions.siteInfo();
+          }}
+        >
+          <SecurityIcon level={level} />
+        </span>
+      ) : (
+        <Search size={12} className="url-lock" />
+      )}
       <span className="url-text">{tab ? displayUrl(tab.url) : 'Search or enter address'}</span>
+      {tab && blocked > 0 && (
+        <span className="url-shield" role="button" title={`${blocked} blocked on this page`} data-testid="url-blocked" onClick={(e) => { e.stopPropagation(); actions.siteInfo(); }}>
+          <ShieldCheck size={12} /> {blocked > 99 ? '99+' : blocked}
+        </span>
+      )}
       {boosted && (
         <span
           className="url-boost"

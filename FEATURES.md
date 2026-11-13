@@ -34,7 +34,7 @@ Studied only — no Arc code, text, icons or name are used in Kite.
 | Hover preview of a tab | "Show Hover Preview" | ❌ |
 | Mute / unmute tab, **mute all tabs** | "mute all tabs", "unmute all tabs" | 🟡 per-tab only |
 | Sidebar media controls / mini player for whatever is playing | "Close Mini Player", "Has media player open" | 🟡 mini player for popped-out videos only |
-| Profiles (separate logins/cookies, per Space) | Menu: New Profile, Change Profile | ❌ (left out at first) |
+| Profiles (separate logins/cookies, per Space) | Menu: New Profile, Change Profile | ✅ “Separate logins” per Space |
 | Incognito / private window, blank window | Menu: New Incognito Window, Blank Window | ❌ |
 | Several main windows | Menu: New Window, Create Window | ❌ (one main window) |
 
@@ -52,16 +52,16 @@ Studied only — no Arc code, text, icons or name are used in Kite.
 | Copy URL **as Markdown / as quote** | Menu: Copy URL as Markdown, Copy URL as Quote | ❌ |
 | Zoom in / out / reset | Menu: Zoom In, Zoom Out, Reset Zoom | ✅ |
 | Clear cookies / cache **and refresh** this site | Menu: Clear Cookies and Refresh, Clear Cache and Refresh | ❌ |
-| Site Control Center (per-site permissions, cookies, zoom, developer mode) | `ARC_SiteControlCenter`, "site settings view" | 🟡 permission prompts only |
-| Built-in ad blocking and cookie-banner blocking | `ARC_AdBlocking`, "Block Cookie Banners" | ❌ |
-| Downloads list | Menu: Downloads, View Downloads | ❌ |
+| Site Control Center (per-site permissions, cookies, zoom, developer mode) | `ARC_SiteControlCenter`, "site settings view" | ✅ address-bar popover: connection, Shields, permissions, erase site data |
+| Built-in ad blocking and cookie-banner blocking | `ARC_AdBlocking`, "Block Cookie Banners" | ✅ Shields (EasyList/EasyPrivacy, per-site exceptions) |
+| Downloads list | Menu: Downloads, View Downloads | ✅ (plus image conversion and video/HLS saving) |
 | Full History page | Menu: View History | 🟡 history in the command bar only |
 | Print, Save Page As, View Source | Menu items | ❌ |
 | Developer tools for a page, JavaScript console, network inspector, task manager | Menu: Developer | ❌ (only Kite's own developer tools) |
 | Picture-in-picture video, floats over other apps | `ARC_PictureInPicture` | ✅ (plus controls and mini player) |
 | Translate page | `ARC_Translation`, "Never Translate This Site" | ☁️ needs a translation service |
 | Passwords and autofill | "manage passwords", "Autofill your passwords" | ❌ (big job; macOS Passwords app works meanwhile) |
-| Chrome extensions | Menu: Extensions, Add Extension | ❌ (left out on purpose) |
+| Chrome extensions | Menu: Extensions, Add Extension | 🟡 install/manage/remove; runs what Electron supports (no toolbar buttons, see Settings → Extensions) |
 | Cast to a TV | Menu: Cast | ❌ |
 
 ## Making and customising

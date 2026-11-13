@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Check, Copy, ClipboardPaste, Sparkles, Undo2, Wand2, Globe2 } from 'lucide-react';
-import { ACCENTS, PALETTES, STYLES, applyLookDraft, decodeTheme, defaultLook, encodeTheme, restoreLook, snapshotLook, styleById, type Look, type LookDraft, type StyleId } from '@shared/look';
+import { ACCENTS, PALETTES, STYLES, applyLookDraft, decodeTheme, defaultLook, encodeTheme, restoreLook, snapshotLook, styleById, THEMES, themeDraft, matchTheme, type Look, type LookDraft, type StyleId } from '@shared/look';
 import { activeSpace } from '@shared/tree';
 import type { Settings, SpaceTheme } from '@shared/types';
 import { act, getS, setUi, toast, useKite } from '../store';
@@ -85,6 +85,7 @@ export function LookStudio() {
     previewLook({ settings: { look: { ...defaultLook(id), accent: look.accent, contrast: look.contrast }, radius: d.radius, gap: d.gap, density: d.density, font: d.font } });
   };
 
+  const current = matchTheme(look, theme);
   const read = readability(theme, settings, systemDark);
   const fix = () => {
     const intensity = readableIntensity(theme, settings, systemDark);
@@ -105,6 +106,28 @@ export function LookStudio() {
           <span className="look-bar-text muted">Try anything below. Kite previews it live, and you choose to keep it.</span>
         )}
       </div>
+
+      <section className="look-sec">
+        <h3 className="look-h">Themes <span className="muted">ready-made looks; change anything afterwards</span></h3>
+        <div className="look-themes" role="radiogroup" aria-label="Theme" data-testid="look-themes">
+          {THEMES.map((t) => {
+            const d = themeDraft(t, look);
+            const on = current?.id === t.id;
+            const sampleSettings = { ...settings, ...d.settings } as Settings;
+            const sampleTheme = { ...theme, ...d.theme };
+            return (
+              <button key={t.id} role="radio" aria-checked={on} className="look-theme" data-on={on || undefined} data-testid={`look-theme-${t.id}`} onClick={() => previewLook(d)}>
+                <span className="look-theme-pair">
+                  <MiniPreview theme={{ ...sampleTheme, mode: 'light' }} settings={sampleSettings} systemDark={false} />
+                  <MiniPreview theme={{ ...sampleTheme, mode: 'dark' }} settings={sampleSettings} systemDark={true} />
+                </span>
+                <span className="look-style-name">{t.name}</span>
+                <span className="look-style-tag">{t.note} · {styleById(t.style).name}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
       <section className="look-sec">
         <h3 className="look-h">Style</h3>

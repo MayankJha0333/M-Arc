@@ -45,6 +45,19 @@ export interface TestHooks {
   pipFrameState(v: import('@shared/pipFrame').PipFrameState): void;
   /** Simulate the floating video's "Back to tab". */
   focusTab(tabId: string): void;
+  /** What the main process was told or asked (Shields, downloads, extensions, privacy). */
+  prefs: import('@shared/ipc').Prefs | null;
+  windowButtons: { visible: boolean; x: number; y: number }[];
+  windowState(v: { fullscreen: boolean }): void;
+  calls: string[];
+  shieldsCount(tabId: string, count: number): void;
+  setDownloads(list: import('@shared/downloads').DownloadEntry[]): void;
+  downloadDone(entry: import('@shared/downloads').DownloadEntry): void;
+  media: import('@shared/downloads').MediaItem[];
+  hlsVariants: import('@shared/downloads').HlsVariant[];
+  /** What "choose a folder/file" or the store returns next (an error text makes it fail). */
+  extensionPreview: import('@shared/extensions').ExtensionPreview | string | null;
+  permissions: import('@shared/ipc').SitePermission[];
 }
 
 const STORAGE_KEY = 'kite-state';
@@ -59,6 +72,16 @@ function makeWebBridge(): KiteBridge {
   const pipState = new Emitter<{ tabId: string; popped: boolean }>();
   const pipFrameState = new Emitter<import('@shared/pipFrame').PipFrameState>();
   const focusTab = new Emitter<string>();
+  const windowState = new Emitter<{ fullscreen: boolean }>();
+  const shieldsCount = new Emitter<{ tabId: string; count: number }>();
+  const shieldsStatus = new Emitter<import('@shared/ipc').ShieldsStatus>();
+  const downloadsState = new Emitter<import('@shared/downloads').DownloadEntry[]>();
+  const downloadDone = new Emitter<import('@shared/downloads').DownloadEntry>();
+  const extState = new Emitter<import('@shared/extensions').ExtensionInfo[]>();
+  const permState = new Emitter<import('@shared/ipc').SitePermission[]>();
+  let dl: import('@shared/downloads').DownloadEntry[] = [];
+  let exts: import('@shared/extensions').ExtensionInfo[] = [];
+  const pendingExt = new Map<string, import('@shared/extensions').ExtensionPreview>();
   // Mirrors the main process: on leaving the app, pop out the first target that has a playing video.
   let pipTargets: string[] = [];
   let pipLeft: string | null = null;
@@ -96,7 +119,26 @@ function makeWebBridge(): KiteBridge {
     pipFrameDrags: [],
     pipFrameState: (v) => pipFrameState.emit(v),
     focusTab: (id) => focusTab.emit(id),
+    prefs: null,
+    windowButtons: [],
+    windowState: (v) => windowState.emit(v),
+    calls: [],
+    shieldsCount: (tabId, count) => shieldsCount.emit({ tabId, count }),
+    setDownloads: (list) => {
+      dl = list;
+      downloadsState.emit(dl);
+    },
+    downloadDone: (e) => downloadDone.emit(e),
+    media: [],
+    hlsVariants: [],
+    extensionPreview: null,
+    permissions: [],
   };
+  const preview = (): import('@shared/ipc').Result<import('@shared/extensions').ExtensionPreview> => {
+    const p = hooks.extensionPreview;
+    return typeof p === 'string' ? { error: p } : p ? { value: p } : { error: 'Nothing chosen' };
+  };
+  const pushExt = () => extState.emit([...exts]);
   window.__kiteTest = hooks;
   const platformName = /Mac/i.test(navigator.platform) ? 'darwin' : 'linux';
   return {
@@ -153,10 +195,84 @@ function makeWebBridge(): KiteBridge {
       hooks.exported.push({ name, text });
       return true;
     },
+    setWindowButtons: (v) => void hooks.windowButtons.push(v),
+    onWindowState: (cb) => windowState.on(cb),
+    setPrefs: (p) => {
+      hooks.prefs = p;
+    },
+    shieldsStatus: async () => ({ source: 'builtin', updatedAt: 0, updating: false }),
+    refreshShields: async () => {
+      hooks.calls.push('refreshShields');
+      const st = { source: 'full' as const, updatedAt: Date.now(), updating: false };
+      shieldsStatus.emit(st);
+      return st;
+    },
+    onShieldsStatus: (cb) => shieldsStatus.on(cb),
+    onShieldsCount: (cb) => shieldsCount.on(cb),
+    allowHttp: (host) => void hooks.calls.push(`allowHttp:${host}`),
+    permissions: async () => hooks.permissions,
+    onPermissions: (cb) => permState.on(cb),
+    forgetPermission: (site, permission) => {
+      hooks.calls.push(`forget:${site ?? '*'}:${permission ?? '*'}`);
+      hooks.permissions = hooks.permissions.filter((p) => !((!site || p.site === site) && (!permission || p.permission === permission)));
+      permState.emit(hooks.permissions);
+    },
+    clearData: async (what, site) => void hooks.calls.push(`clear:${site ?? '*'}:${Object.entries(what).filter(([, v]) => v).map(([k]) => k).join('+')}`),
+    downloads: async () => dl,
+    onDownloads: (cb) => downloadsState.on(cb),
+    onDownloadDone: (cb) => downloadDone.on(cb),
+    downloadAction: async (action, id) => {
+      hooks.calls.push(`download:${action}:${id ?? ''}`);
+      if (action === 'clear') dl = dl.filter((d) => d.state === 'progressing' || d.state === 'paused');
+      else if (action === 'remove') dl = dl.filter((d) => d.id !== id);
+      else dl = dl.map((d) => (d.id !== id ? d : action === 'pause' ? { ...d, state: 'paused' as const } : action === 'resume' ? { ...d, state: 'progressing' as const } : action === 'cancel' ? { ...d, state: 'cancelled' as const } : d));
+      downloadsState.emit(dl);
+      return null;
+    },
+    pageMedia: async () => hooks.media,
+    downloadMedia: (_id, url) => void hooks.calls.push(`media:${url}`),
+    hlsVariants: async () => ({ value: hooks.hlsVariants }),
+    downloadHls: (_id, url) => void hooks.calls.push(`hls:${url}`),
+    extensions: async () => exts,
+    onExtensions: (cb) => extState.on(cb),
+    extensionPick: async () => {
+      const r = preview();
+      if (r.value) pendingExt.set(r.value.token, r.value);
+      return hooks.extensionPreview === null ? { value: null } : r;
+    },
+    extensionFromStore: async () => {
+      const r = preview();
+      if (r.value) pendingExt.set(r.value.token, r.value);
+      return r;
+    },
+    extensionConfirm: async (token) => {
+      const p = pendingExt.get(token);
+      if (!p) return { error: 'That install is no longer waiting.' };
+      pendingExt.delete(token);
+      const { token: _t, ...rest } = p;
+      exts = [...exts, { ...rest, id: `x-${exts.length + 1}`, enabled: true, installedAt: Date.now() }];
+      pushExt();
+      return { value: true };
+    },
+    extensionCancel: (token) => void pendingExt.delete(token),
+    extensionEnable: async (id, enabled) => {
+      exts = exts.map((x) => (x.id === id ? { ...x, enabled } : x));
+      pushExt();
+    },
+    extensionRemove: async (id) => {
+      exts = exts.filter((x) => x.id !== id);
+      pushExt();
+    },
+    extensionOpen: async (id, which) => {
+      hooks.calls.push(`extOpen:${id}:${which}`);
+      return true;
+    },
   };
 }
 
 export const isElectron = typeof window !== 'undefined' && !!window.kite;
+/** Tests in a plain browser can ask for the desktop app's layout with ?chrome=electron. */
+export const desktopChrome = isElectron || new URLSearchParams(location.search).get('chrome') === 'electron';
 export const bridge: KiteBridge = window.kite ?? makeWebBridge();
 export const isMac = bridge.platform === 'darwin';
 const modeParam = new URLSearchParams(location.search).get('mode');

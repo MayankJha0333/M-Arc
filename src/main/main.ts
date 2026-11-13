@@ -16,25 +16,36 @@ import {
   type IpcMainInvokeEvent,
   type WebContents,
 } from 'electron';
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { Storage } from './storage';
 import { findAction, toAccelerator } from '../shared/shortcuts';
-import { hostOf } from '../shared/url';
 import type { OpenRequest } from '../shared/ipc';
 import { findPipWindow, ignoreMouseOnPipWindow, inspectPipWindow, keepPipWindowIgnoringMouse, roundPipWindowIfSafe, floatPipWindowsSoon, frameStep, installVideoPanelHooks, setPipWindowFrame } from './macWindows';
 import { createPipFrame } from './pipFrame';
 import { PIP_FRAME_ACTIONS, RESIZE_EDGES, type PipFrameAction, type ResizeEdge } from '../shared/pipFrame';
 import { isPipMediaCommand, isThumb, MEDIA_STATE_SCRIPT, pipMediaScript, PIP_REENTER_SCRIPT, PIP_THUMB_SCRIPT, PIP_TO_MINI_SCRIPT } from '../shared/pip';
+import { createNetwork } from './network';
+import { createDownloads } from './downloads';
+import { createExtensions } from './extensions';
+import { createPermissions } from './permissions';
+import { DEFAULT_PARTITION, isKitePartition, partitionForSpace } from '../shared/profiles';
+import { defaultShields, sanitizeShields, siteKey } from '../shared/shields';
+import type { ClearWhat, Prefs, Result } from '../shared/ipc';
 import { MEDIA_PLAYING_SCRIPT, MEDIA_TRACKER_SCRIPT, PIP_CLOSE_SCRIPT, PIP_ENTER_SCRIPT, PIP_EXIT_SCRIPT, pipPopped } from '../shared/pip';
 
 const isMac = process.platform === 'darwin';
 const devUrl = process.env.KITE_DEV_URL;
 const userDataOverride = process.env.KITE_USER_DATA;
 if (userDataOverride) app.setPath('userData', userDataOverride);
+// Tests save downloads into a throwaway folder instead of your real Downloads.
+if (process.env.KITE_TEST && process.env.KITE_DOWNLOADS) app.setPath('downloads', process.env.KITE_DOWNLOADS);
 
-const PARTITION = 'persist:kite';
+const PARTITION = DEFAULT_PARTITION;
+/** Tests can run in the background: windows appear without taking focus from what you're doing. */
+const quiet = !!process.env.KITE_TEST && !!process.env.KITE_TEST_QUIET;
+const present = (win: BrowserWindow) => (quiet ? win.showInactive() : win.show());
 const isWebUrl = (u: string) => /^https?:\/\//i.test(u);
 
 let storage: Storage;
@@ -49,6 +60,121 @@ const pendingExternal: string[] = [];
 function rendererUrl(query = ''): string {
   if (devUrl) return `${devUrl}${query}`;
   return `file://${join(__dirname, '../renderer/index.html')}${query}`;
+}
+
+// ---- Cookie jars, Shields, downloads, extensions, permissions --------------------
+
+let prefs: Prefs = { shields: defaultShields(), httpsOnly: true, sendGpc: true, askWhereToSave: false };
+function readPrefs(raw: unknown): Prefs {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const bool = (k: keyof Prefs, d: boolean) => (typeof o[k] === 'boolean' ? (o[k] as boolean) : d);
+  return { shields: sanitizeShields(o.shields), httpsOnly: bool('httpsOnly', true), sendGpc: bool('sendGpc', true), askWhereToSave: bool('askWhereToSave', false) };
+}
+
+/** Every web page Kite shows (webviews and the popups they open), by webContents id. */
+const webPages = new Set<number>();
+/** Kite's cookie jars that are in use: partition name → session. */
+const jars = new Map<string, Electron.Session>();
+const toMain = (channel: string, payload: unknown) => {
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isLoading()) mainWindow.webContents.send(channel, payload);
+};
+let network: ReturnType<typeof createNetwork>;
+let downloads: ReturnType<typeof createDownloads>;
+let extensions: ReturnType<typeof createExtensions>;
+let permissions: ReturnType<typeof createPermissions>;
+
+function setupFeatures() {
+  const dir = app.getPath('userData');
+  network = createNetwork({
+    dir: join(dir, 'shields'),
+    prefs: () => prefs,
+    isPage: (id) => webPages.has(id),
+    onCount: (wcId, count) => {
+      const p = pages.get(wcId);
+      if (p && !p.host.isDestroyed()) p.host.send('shields-count', { tabId: p.tabId, count });
+    },
+    onStatus: (st) => toMain('shields-status', st),
+    log: debugLog,
+  });
+  downloads = createDownloads({
+    dir,
+    ask: () => prefs.askWhereToSave,
+    window: () => BrowserWindow.getFocusedWindow() ?? mainWindow,
+    onChange: (list) => toMain('downloads-state', list),
+    onDone: (entry) => toMain('download-done', entry),
+    log: debugLog,
+  });
+  extensions = createExtensions({
+    dir,
+    sessions: () => [...jars.values()],
+    defaultSession: () => ensureJar(PARTITION),
+    quiet: () => quiet,
+    openUrl: (url) => {
+      const win = ensureMainWindow();
+      sendOpen(win.webContents, { url, disposition: 'new-tab', sourceTabId: null });
+      present(win);
+    },
+    onChange: (list) => toMain('extensions-state', list),
+    log: debugLog,
+  });
+  permissions = createPermissions({
+    dir,
+    windowFor: (wc) => BrowserWindow.fromWebContents(pages.get(wc.id)?.host ?? wc) ?? mainWindow ?? undefined,
+    onChange: (list) => toMain('permissions-state', list),
+  });
+}
+
+/** Get a cookie jar ready the first time it is used: blocking, downloads, permissions, extensions. */
+function ensureJar(partition: string): Electron.Session {
+  let ses = jars.get(partition);
+  if (ses) return ses;
+  ses = session.fromPartition(partition);
+  jars.set(partition, ses);
+  network.attach(ses);
+  downloads.attach(ses);
+  permissions.attach(ses);
+  void extensions.attach(ses);
+  return ses;
+}
+const partitionOf = (ses: Electron.Session) => [...jars].find(([, s]) => s === ses)?.[0] ?? PARTITION;
+
+/** Erase the data of isolated Spaces that no longer exist (runs at startup, before any page loads). */
+function removeOrphanJars(state: unknown) {
+  try {
+    const spaces = ((state as { spaces?: { id: string; isolated?: boolean }[] })?.spaces ?? []).filter((s) => s && typeof s.id === 'string');
+    const used = new Set(spaces.map((s) => partitionForSpace(s).replace(/^persist:/, '').toLowerCase()));
+    const dir = join(app.getPath('userData'), 'Partitions');
+    if (!existsSync(dir)) return;
+    for (const name of readdirSync(dir)) {
+      if (!/^kite-space-/i.test(name) || used.has(name.toLowerCase())) continue;
+      rmSync(join(dir, name), { recursive: true, force: true });
+      debugLog(`profiles: erased data of removed Space jar ${name}`);
+    }
+  } catch (err) {
+    debugLog(`profiles: cleanup failed: ${(err as Error).message}`);
+  }
+}
+
+async function clearData(what: ClearWhat, site?: string) {
+  const host = site ? siteKey(site) : '';
+  if (site && !host) return;
+  for (const ses of jars.values()) {
+    if (!host) {
+      const storages = [...(what.cookies ? ['cookies' as const] : []), ...(what.storage ? (['localstorage', 'indexdb', 'websql', 'serviceworkers', 'cachestorage', 'filesystem', 'shadercache'] as const) : [])];
+      if (storages.length) await ses.clearStorageData({ storages: [...storages] });
+      if (what.cache) await ses.clearCache();
+      continue;
+    }
+    if (what.cookies) {
+      for (const c of await ses.cookies.get({})) {
+        const d = (c.domain ?? '').replace(/^\./, '');
+        if (d !== host && !d.endsWith(`.${host}`) && !host.endsWith(`.${d}`)) continue;
+        await ses.cookies.remove(`http${c.secure ? 's' : ''}://${d}${c.path ?? '/'}`, c.name).catch(() => undefined);
+      }
+    }
+    if (what.storage) for (const origin of [`https://${host}`, `https://www.${host}`, `http://${host}`]) await ses.clearStorageData({ origin, storages: ['localstorage', 'indexdb', 'websql', 'serviceworkers', 'cachestorage', 'filesystem'] }).catch(() => undefined);
+    if (what.cache) await ses.clearCache();
+  }
 }
 
 /** Only Kite's own UI may use Kite's private messages — never a web page. */
@@ -90,7 +216,7 @@ function createMainWindow(): BrowserWindow {
     webPreferences: baseWebPreferences(),
   });
   lockKiteWindow(win);
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => present(win));
   win.loadURL(rendererUrl());
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null;
@@ -105,6 +231,11 @@ function createMainWindow(): BrowserWindow {
     if (!isMac) void autoPipOnLeave('window blur');
   });
   win.on('focus', () => void autoPipReturn('window focus'));
+  // The UI lays itself out differently in full screen (no window buttons to make room for).
+  const tellState = () => !win.isDestroyed() && win.webContents.send('window-state', { fullscreen: win.isFullScreen() });
+  win.on('enter-full-screen', tellState);
+  win.on('leave-full-screen', tellState);
+  win.webContents.on('did-finish-load', tellState);
   return win;
 }
 
@@ -323,12 +454,18 @@ async function pipFrameAction(action: PipFrameAction) {
 const testHooks = process.env.KITE_TEST
   ? {
       frameActions: [] as string[],
+      windowButtons: [] as { visible: boolean; x: number; y: number }[],
       pipFrame,
       /** macOS: the real floating video window, as macOS sees it. */
       inspectPip: () => inspectPipWindow(debugLog),
       /** Which tab's video is floating (or in the mini player). */
       currentPip: () => (currentPip ? { tabId: currentPip.tabId } : null),
       isMac,
+      network: () => network,
+      downloads: () => downloads,
+      extensions: () => extensions,
+      permissions: () => permissions,
+      jars: () => [...jars.keys()],
     }
   : null;
 if (testHooks) (globalThis as Record<string, unknown>).__kiteTest = testHooks;
@@ -356,7 +493,7 @@ function createLittleWindow(url: string): BrowserWindow | null {
   });
   lockKiteWindow(win);
   littleWindows.add(win);
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => present(win));
   win.loadURL(rendererUrl(`?mode=little&url=${encodeURIComponent(url)}`));
   win.on('closed', () => littleWindows.delete(win));
   return win;
@@ -425,7 +562,7 @@ function hardenWebview(contents: WebContents) {
       popupTimes.push(now);
       return {
         action: 'allow',
-        overrideBrowserWindowOptions: { width: 520, height: 680, autoHideMenuBar: true, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, partition: PARTITION } },
+        overrideBrowserWindowOptions: { width: 520, height: 680, autoHideMenuBar: true, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, partition: partitionOf(contents.session) } },
       };
     }
     if (host) {
@@ -437,6 +574,12 @@ function hardenWebview(contents: WebContents) {
   // Popups get the same rules, and can't open more popups themselves.
   contents.on('did-create-window', (popup) => {
     guardNavigation(popup.webContents);
+    webPages.add(popup.webContents.id);
+    const popupId = popup.webContents.id;
+    popup.webContents.once('destroyed', () => {
+      webPages.delete(popupId);
+      network.forget(popupId);
+    });
     popup.webContents.setWindowOpenHandler((d) => {
       const host = pages.get(contents.id)?.host ?? mainWindow?.webContents;
       if (host) sendOpen(host, { url: d.url, disposition: 'new-tab', sourceTabId: null });
@@ -482,6 +625,7 @@ function hardenWebview(contents: WebContents) {
         { label: 'Open Link in Little Window', click: () => createLittleWindow(url) },
         { type: 'separator' },
         { label: 'Copy Link', click: () => clipboard.writeText(url) },
+        { label: 'Download Linked File', click: () => downloads.downloadUrl(contents, url) },
         { type: 'separator' },
       );
     }
@@ -489,7 +633,26 @@ function hardenWebview(contents: WebContents) {
     if (params.isEditable) items.push({ role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' });
     if (params.mediaType === 'image' && isWebUrl(params.srcURL)) {
       items.push({ label: 'Open Image in New Tab', click: () => sendOpen(host, { url: params.srcURL, disposition: 'new-tab', sourceTabId: page.tabId }) });
+      items.push({ label: 'Copy Image', click: () => contents.copyImageAt(params.x, params.y) });
       items.push({ label: 'Copy Image Address', click: () => clipboard.writeText(params.srcURL) });
+      items.push({ label: 'Save Image', click: () => void downloads.saveImage(contents, params.srcURL, 'original') });
+      items.push({
+        label: 'Save Image As',
+        submenu: [
+          { label: 'Original Format…', click: () => void downloads.saveImage(contents, params.srcURL, 'original', true) },
+          { label: 'PNG…', click: () => void downloads.saveImage(contents, params.srcURL, 'png', true) },
+          { label: 'JPEG…', click: () => void downloads.saveImage(contents, params.srcURL, 'jpeg', true) },
+        ],
+      });
+    }
+    if ((params.mediaType === 'video' || params.mediaType === 'audio') && isWebUrl(params.srcURL)) {
+      const what = params.mediaType === 'video' ? 'Video' : 'Audio';
+      items.push({ label: `Save ${what}`, click: () => downloads.downloadUrl(contents, params.srcURL) });
+      items.push({ label: `Save ${what} As…`, click: () => downloads.downloadUrl(contents, params.srcURL, { saveAs: true }) });
+      items.push({ label: `Copy ${what} Address`, click: () => clipboard.writeText(params.srcURL) });
+    } else if (params.mediaType === 'video' || params.mediaType === 'audio') {
+      // Streamed video (no plain file address): the Downloads panel lists what can be saved.
+      items.push({ label: 'Find Downloadable Video…', click: () => host.send('shortcut', 'downloadsPanel') });
     }
     if (items.length && items[items.length - 1].type !== 'separator') items.push({ type: 'separator' });
     items.push(
@@ -500,50 +663,6 @@ function hardenWebview(contents: WebContents) {
       { label: 'Inspect Element', click: () => contents.inspectElement(params.x, params.y) },
     );
     Menu.buildFromTemplate(items).popup();
-  });
-}
-
-/**
- * Websites must ask before using the camera, microphone, location, notifications…
- * Answers are remembered until Kite quits.
- */
-const decisions = new Map<string, boolean>();
-const ALWAYS_OK = new Set(['fullscreen', 'clipboard-sanitized-write', 'pointerLock', 'window-management']);
-const LABELS: Record<string, string> = {
-  media: 'use your camera or microphone',
-  geolocation: 'know your location',
-  notifications: 'show notifications',
-  'clipboard-read': 'read your clipboard',
-  midi: 'use MIDI devices',
-  midiSysex: 'use MIDI devices',
-  'display-capture': 'record your screen',
-  idleDetection: 'know when you’re idle',
-  hid: 'use connected devices',
-  serial: 'use serial devices',
-  usb: 'use USB devices',
-  'storage-access': 'use its saved data on other sites',
-  'top-level-storage-access': 'use its saved data on other sites',
-};
-function setupPermissions() {
-  const ses = session.fromPartition(PARTITION);
-  ses.setPermissionRequestHandler(async (wc, permission, callback, details) => {
-    if (ALWAYS_OK.has(permission)) return callback(true);
-    if (permission === 'openExternal') return callback(false); // handled by openOutside()
-    const label = LABELS[permission];
-    const site = hostOf(details.requestingUrl || wc.getURL()) || 'This page';
-    if (!label) return callback(false);
-    const key = `${site}|${permission}`;
-    if (decisions.has(key)) return callback(decisions.get(key)!);
-    const win = BrowserWindow.fromWebContents(pages.get(wc.id)?.host ?? wc) ?? mainWindow ?? undefined;
-    const opts = { type: 'question' as const, buttons: ['Don’t Allow', 'Allow'], defaultId: 0, cancelId: 0, message: `Allow ${site} to ${label}?`, detail: 'You’ll be asked again after Kite restarts.' };
-    const res = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
-    const ok = res.response === 1;
-    decisions.set(key, ok);
-    callback(ok);
-  });
-  ses.setPermissionCheckHandler((wc, permission, origin) => {
-    if (ALWAYS_OK.has(permission)) return true;
-    return decisions.get(`${hostOf(origin) || hostOf(wc?.getURL() ?? '')}|${permission}`) ?? false;
   });
 }
 
@@ -593,7 +712,10 @@ function setupIpc() {
       e.returnValue = false;
     }
   });
-  on('page:register', (e, id: number, tabId: string) => pages.set(id, { tabId, host: e.sender }));
+  on('page:register', (e, id: number, tabId: string) => {
+    pages.set(id, { tabId, host: e.sender });
+    e.sender.send('shields-count', { tabId, count: network.count(id) });
+  });
   on('page:unregister', (_e, id: number) => pages.delete(id));
   // Run Kite's helper scripts in a separate "world" the page itself can't see or tamper with.
   handle('page:exec-isolated', async (e, id: number, code: string) => {
@@ -631,6 +753,107 @@ function setupIpc() {
     }
     return false;
   });
+  // macOS: the window buttons follow the sidebar (and hide with it) instead of needing an empty band above the page.
+  on('window:buttons', (e, v: { visible?: unknown; x?: unknown; y?: unknown }) => {
+    if (!isMac || !mainWindow || e.sender !== mainWindow.webContents || !v) return;
+    const num = (n: unknown, max: number) => Math.round(Math.max(0, Math.min(max, Number(n) || 0)));
+    testHooks?.windowButtons.push({ visible: !!v.visible, x: num(v.x, 10000), y: num(v.y, 200) });
+    mainWindow.setWindowButtonVisibility(!!v.visible);
+    if (v.visible) mainWindow.setWindowButtonPosition({ x: num(v.x, 10000), y: num(v.y, 200) });
+  });
+
+  // ---- Shields, privacy and security ----
+  on('prefs:set', (e, p: unknown) => {
+    if (!mainWindow || e.sender !== mainWindow.webContents) return;
+    prefs = readPrefs(p);
+    network.prefsChanged();
+  });
+  handle('shields:status', () => network.status());
+  handle('shields:refresh', async () => {
+    await network.refresh();
+    return network.status();
+  });
+  on('net:allow-http', (_e, host: string) => typeof host === 'string' && /^[a-z0-9.-]{1,253}$/i.test(host) && network.allowHttp(host));
+  handle('permissions:list', () => permissions.list());
+  on('permissions:forget', (_e, site?: string, permission?: string) => permissions.forget(typeof site === 'string' ? site : undefined, typeof permission === 'string' ? permission : undefined));
+  handle('privacy:clear', (_e, what: ClearWhat, site?: string) => clearData({ cookies: !!what?.cookies, cache: !!what?.cache, storage: !!what?.storage }, typeof site === 'string' ? site : undefined));
+
+  // ---- Downloads ----
+  /** The page behind a webContents id, if it belongs to the window that asks. */
+  const pageOf = (e: IpcMainEvent | IpcMainInvokeEvent, id: number) => {
+    const page = pages.get(id);
+    const wc = allWebContents.fromId(id);
+    return page && page.host === e.sender && wc && !wc.isDestroyed() ? wc : null;
+  };
+  handle('downloads:list', () => downloads.list());
+  handle('downloads:act', (_e, action: string, id?: string) =>
+    ['pause', 'resume', 'cancel', 'open', 'reveal', 'remove', 'clear'].includes(action) ? downloads.act(action as 'pause', typeof id === 'string' ? id : undefined) : null,
+  );
+  handle('media:list', async (e, id: number) => {
+    const wc = pageOf(e, id);
+    if (!wc) return [];
+    const found = new Map(network.media(id).map((m) => [m.url, m]));
+    // Plain video/audio files on the page that haven't started loading yet.
+    for (const frame of wc.mainFrame.framesInSubtree) {
+      try {
+        const list = (await frame.executeJavaScript(
+          `[...document.querySelectorAll('video,audio')].flatMap((m) => [m.currentSrc, ...[...m.querySelectorAll('source')].map((s) => s.src)].filter((u) => /^https?:/.test(u || '')).map((u) => ({ url: u, audio: m.tagName === 'AUDIO' }))).slice(0, 20)`,
+        )) as { url: string; audio: boolean }[];
+        for (const m of list) {
+          if (found.has(m.url)) continue;
+          const stream = /\.m3u8(\?|$)/i.test(m.url);
+          found.set(m.url, { url: m.url, kind: stream ? 'stream' : m.audio ? 'audio' : 'video', mime: '', size: 0, label: m.url.split('/').pop()?.split('?')[0] || 'media' });
+        }
+      } catch {
+        /* frame went away */
+      }
+    }
+    return [...found.values()];
+  });
+  on('media:download', (e, id: number, url: string) => {
+    const wc = pageOf(e, id);
+    if (wc && isWebUrl(url)) downloads.downloadUrl(wc, url);
+  });
+  handle('media:hls-variants', async (e, id: number, url: string): Promise<Result<unknown>> => {
+    const wc = pageOf(e, id);
+    if (!wc || !isWebUrl(url)) return { error: 'That page is gone.' };
+    try {
+      return { value: await downloads.hlsVariants(wc.session, url, wc.getURL()) };
+    } catch (err) {
+      return { error: (err as Error).message };
+    }
+  });
+  on('media:hls-download', (e, id: number, url: string, title: string) => {
+    const wc = pageOf(e, id);
+    if (wc && isWebUrl(url)) void downloads.downloadHls(wc, url, String(title ?? '').slice(0, 120));
+  });
+
+  // ---- Chrome extensions ----
+  const attempt = async <T,>(fn: () => T | Promise<T>): Promise<Result<T>> => {
+    try {
+      return { value: await fn() };
+    } catch (err) {
+      return { error: (err as Error).message || 'Something went wrong.' };
+    }
+  };
+  handle('ext:list', () => extensions.list());
+  handle('ext:pick', async (e, kind: string) => {
+    const win = BrowserWindow.fromWebContents(e.sender)!;
+    const res = await dialog.showOpenDialog(
+      win,
+      kind === 'folder'
+        ? { title: 'Choose an unpacked extension folder', properties: ['openDirectory'] }
+        : { title: 'Choose an extension file', properties: ['openFile'], filters: [{ name: 'Chrome extension', extensions: ['crx', 'zip'] }] },
+    );
+    if (res.canceled || !res.filePaths[0]) return { value: null };
+    return attempt(() => (kind === 'folder' ? extensions.previewFolder(res.filePaths[0]) : extensions.previewFile(res.filePaths[0])));
+  });
+  handle('ext:store', (_e, input: string) => attempt(() => extensions.previewStore(String(input ?? ''))));
+  handle('ext:confirm', (_e, token: string) => attempt(async () => (await extensions.confirm(String(token)), true as const)));
+  on('ext:cancel', (_e, token: string) => extensions.cancel(String(token)));
+  handle('ext:enable', (_e, id: string, enabled: boolean) => extensions.setEnabled(String(id), !!enabled));
+  handle('ext:remove', (_e, id: string) => extensions.remove(String(id)));
+  handle('ext:open', (_e, id: string, which: string) => extensions.openPage(String(id), which === 'options' ? 'options' : 'popup'));
   on('debug:log', (_e, msg: string) => typeof msg === 'string' && debugLog(msg.slice(0, 500)));
   // Buttons on Kite's frame around the floating video.
   // Play/pause, seek (drag the slider), skip 10 seconds.
@@ -718,6 +941,9 @@ function buildAppMenu() {
         { type: 'separator' },
         { label: 'Import from Arc…', click: send('importArc') },
         { type: 'separator' },
+        { label: 'Downloads', click: send('downloadsPanel') },
+        { label: 'Extensions', click: send('extensionsPanel') },
+        { type: 'separator' },
         isMac ? { role: 'close' } : { role: 'quit' },
       ],
     },
@@ -758,6 +984,13 @@ if (!gotLock) {
   app.on('web-contents-created', (_e, contents) => {
     if (contents.getType() === 'webview') {
       hardenWebview(contents);
+      const wcId = contents.id;
+      webPages.add(wcId);
+      contents.on('dom-ready', () => void network.applyCosmetics(contents));
+      contents.once('destroyed', () => {
+        webPages.delete(wcId);
+        network.forget(wcId);
+      });
       // Remember when videos last played, so a video the system pauses as you
       // switch apps can still pop out (see MEDIA_TRACKER_SCRIPT).
       contents.on('media-started-playing', () => {
@@ -772,7 +1005,9 @@ if (!gotLock) {
       prefs.sandbox = true;
       prefs.webSecurity = true;
       prefs.allowRunningInsecureContent = false;
-      params.partition = PARTITION;
+      // Pages may only use Kite's own cookie jars: the shared one, or an isolated Space's.
+      params.partition = isKitePartition(params.partition) ? params.partition : PARTITION;
+      ensureJar(params.partition);
       if (!/^(https?|about|file):/i.test(params.src || 'about:blank')) params.src = 'about:blank';
     });
   });
@@ -780,7 +1015,12 @@ if (!gotLock) {
   app.whenReady().then(() => {
     storage = new Storage(app.getPath('userData'));
     storage.snapshot(); // a dated copy per day, kept for a week
-    setupPermissions();
+    const savedState = storage.load();
+    prefs = readPrefs((savedState as { settings?: unknown } | null)?.settings);
+    removeOrphanJars(savedState);
+    setupFeatures();
+    ensureJar(PARTITION);
+    network.prefsChanged();
     setupIpc();
     buildAppMenu();
     // macOS: floating videos become panels, so they show over other apps (even full-screen ones).

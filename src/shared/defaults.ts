@@ -1,4 +1,5 @@
-import { defaultLook } from './look';
+import { DEFAULT_THEME_ID, defaultLook, THEMES } from './look';
+import { defaultShields } from './shields';
 import type { AppState, Settings, Space, SpaceTheme } from './types';
 import { newId } from './ids';
 
@@ -45,6 +46,7 @@ export const DEFAULT_SHORTCUTS: Record<string, string> = {
   zoomIn: 'mod+=',
   zoomOut: 'mod+-',
   popOutVideo: 'mod+shift+p',
+  downloadsPanel: 'mod+shift+j',
 };
 
 export const SHORTCUT_LABELS: Record<string, string> = {
@@ -73,6 +75,7 @@ export const SHORTCUT_LABELS: Record<string, string> = {
   zoomIn: 'Zoom in',
   zoomOut: 'Zoom out',
   popOutVideo: 'Pop out / bring back video',
+  downloadsPanel: 'Open Downloads',
 };
 
 export const SEARCH_ENGINES: { label: string; template: string }[] = [
@@ -112,6 +115,14 @@ export function defaultSettings(): Settings {
     chromeCss: '',
     reduceMotion: false,
     tidyTitles: true,
+    sounds: true,
+    soundVolume: 0.4,
+    motionSpeed: 1,
+    motionFeel: 'style',
+    shields: defaultShields(),
+    httpsOnly: true,
+    sendGpc: true,
+    askWhereToSave: false,
   };
 }
 
@@ -138,6 +149,9 @@ export function makeSpace(name: string, icon: string, themeIndex = 0): Space {
 
 export function createInitialState(): AppState {
   const home = makeSpace('Home', '🪁', 0);
+  // New copies of Kite start on the default theme (existing data keeps its own colours).
+  const start = THEMES.find((t) => t.id === DEFAULT_THEME_ID);
+  if (start) home.theme = { colors: [...start.colors] as [string, string], mode: 'system', intensity: start.intensity, grain: start.grain };
   return {
     version: STATE_VERSION,
     items: {},

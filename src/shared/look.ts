@@ -264,3 +264,59 @@ export function decodeTheme(code: string, fallbackTheme: SpaceTheme): SharedThem
     return null;
   }
 }
+
+// ---- Ready-made themes ----------------------------------------------------------
+// A theme is a style plus colours tuned together. Picking one previews it; every
+// part can still be changed afterwards. Each is checked for readability in light
+// and dark (see tests/unit/themes.test.ts).
+
+export interface ThemePreset {
+  id: string;
+  name: string;
+  /** A few words on its character. */
+  note: string;
+  style: StyleId;
+  colors: [string, string];
+  intensity: number;
+  grain: boolean;
+  /** Overrides on top of the style's own defaults. */
+  look?: Partial<Pick<Look, 'backdrop' | 'border' | 'shadow' | 'translucency' | 'accent'>>;
+}
+
+export const THEMES: readonly ThemePreset[] = [
+  { id: 'daybreak', name: 'Daybreak', note: 'Warm and soft', style: 'calm', colors: ['#f2c9a0', '#e58f65'], intensity: 0.55, grain: true },
+  { id: 'harbor', name: 'Harbor', note: 'Clear blue, calm', style: 'calm', colors: ['#cfe4ff', '#4a7fe0'], intensity: 0.5, grain: true },
+  { id: 'aurora', name: 'Aurora', note: 'Frosted, mint to violet', style: 'glass', colors: ['#a9f0d1', '#6a5cf0'], intensity: 0.5, grain: false },
+  { id: 'lagoon', name: 'Lagoon', note: 'Frosted teal', style: 'glass', colors: ['#9fd8d0', '#2d8a9c'], intensity: 0.55, grain: false },
+  { id: 'ink', name: 'Ink', note: 'Flat, editorial', style: 'paper', colors: ['#e3cbb4', '#7a5640'], intensity: 0.6, grain: false },
+  { id: 'graphite', name: 'Graphite', note: 'Neutral, no distractions', style: 'mono', colors: ['#d6d6d6', '#3a3a3c'], intensity: 0.5, grain: false, look: { accent: '#4a7fe0' } },
+  { id: 'nebula', name: 'Nebula', note: 'Deep violet glow', style: 'studio', colors: ['#e5b8e8', '#8a4fc8'], intensity: 0.45, grain: true },
+  { id: 'ember', name: 'Ember', note: 'Bold and warm', style: 'studio', colors: ['#ffc59e', '#e0483a'], intensity: 0.35, grain: true },
+  { id: 'sakura', name: 'Sakura', note: 'Gentle pink', style: 'calm', colors: ['#ffd3de', '#d9557a'], intensity: 0.45, grain: true },
+  { id: 'moss', name: 'Moss', note: 'Quiet green', style: 'paper', colors: ['#cfe0a6', '#5c8a3e'], intensity: 0.7, grain: false },
+];
+
+/** The theme a new copy of Kite starts with. */
+export const DEFAULT_THEME_ID = 'harbor';
+
+/** What picking a theme previews: its style's shape and type, its colours, and its tuning. */
+export function themeDraft(t: ThemePreset, keep: Pick<Look, 'contrast'>): LookDraft {
+  const d = styleById(t.style).defaults;
+  return {
+    settings: { look: { ...defaultLook(t.style), ...t.look, contrast: keep.contrast }, radius: d.radius, gap: d.gap, density: d.density, font: d.font },
+    theme: { colors: [...t.colors] as [string, string], intensity: t.intensity, grain: t.grain },
+  };
+}
+
+/** Which ready-made theme the current look is (null when it has been changed). */
+export function matchTheme(look: Look, theme: SpaceTheme): ThemePreset | null {
+  return (
+    THEMES.find((t) => {
+      const want = { ...defaultLook(t.style), ...t.look };
+      return (
+        t.style === look.style && t.colors[0] === theme.colors[0].toLowerCase() && t.colors[1] === theme.colors[1].toLowerCase() && Math.abs(t.intensity - theme.intensity) < 0.001 &&
+        want.backdrop === look.backdrop && want.accent === look.accent && Math.abs(want.border - look.border) < 0.001 && Math.abs(want.shadow - look.shadow) < 0.001 && Math.abs(want.translucency - look.translucency) < 0.001
+      );
+    }) ?? null
+  );
+}

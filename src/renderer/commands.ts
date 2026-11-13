@@ -320,6 +320,18 @@ export const actions: Record<string, () => void> = {
   boostsPanel: () => setUi({ panel: 'boosts' }),
   routingPanel: () => setUi({ panel: 'routing' }),
   importArc: () => setUi({ panel: 'import' }),
+  downloadsPanel: () => setUi({ panel: 'downloads' }),
+  extensionsPanel: () => setUi({ panel: 'extensions' }),
+  privacyPanel: () => setUi({ panel: 'settings', panelArg: 'privacy' }),
+  siteInfo: () => setUi((u) => ({ siteInfo: !u.siteInfo })),
+  toggleShields: () => {
+    const on = act((d) => {
+      d.settings.shields = { ...d.settings.shields, enabled: !d.settings.shields.enabled };
+      return d.settings.shields.enabled;
+    });
+    surface(activeTabId())?.reload();
+    toast(on ? 'Shields are on' : 'Shields are off everywhere');
+  },
   nextSpace: () => {
     act((d) => stepSpace(d, 1));
     afterSpaceChange();

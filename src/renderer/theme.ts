@@ -48,6 +48,13 @@ const FONTS: Record<Settings['font'], string> = {
   mono: "ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace",
 };
 
+/** Animation feels you can pick instead of the style's own. */
+export const FEEL: Partial<Record<Settings['motionFeel'], { ease: string; ms: number }>> = {
+  smooth: { ease: 'cubic-bezier(0.32, 0.72, 0, 1)', ms: 300 },
+  snappy: { ease: 'cubic-bezier(0.2, 0, 0, 1)', ms: 130 },
+  bouncy: { ease: 'cubic-bezier(0.34, 1.45, 0.64, 1)', ms: 320 },
+};
+
 const ROW: Record<Settings['density'], number> = { compact: 30, comfortable: 36, roomy: 42 };
 
 const rgba = (hex: string, a: number) => {
@@ -168,8 +175,9 @@ export function themeVars(theme: SpaceTheme, settings: Settings, systemDark: boo
     '--gap': `${settings.gap}px`,
     '--sidebar-w': `${settings.sidebarWidth}px`,
     '--row-h': `${ROW[settings.density]}px`,
-    '--ease': style.motion.ease,
-    '--dur': `${style.motion.ms}ms`,
+    '--ease': FEEL[settings.motionFeel]?.ease ?? style.motion.ease,
+    '--dur': `${Math.round((FEEL[settings.motionFeel]?.ms ?? style.motion.ms) / (settings.motionSpeed || 1))}ms`,
+    '--speed': String(1 / (settings.motionSpeed || 1)),
     colorScheme: dark ? 'dark' : 'light',
   };
 }

@@ -7,6 +7,8 @@ import { WebSurface } from './WebSurface';
 import { setupPage } from '../pageSetup';
 import { surface } from '../surfaces';
 import { SiteIcon } from './SiteIcon';
+import { partitionForSpace } from '@shared/profiles';
+import { activeSpace } from '@shared/tree';
 
 let peekSeq = 0;
 setClosePeek(() => closePeek());
@@ -44,6 +46,8 @@ function PeekWindow({ id }: { id: string }) {
   const [initial] = useState(peek.url);
   const [nav, setNav] = useState({ back: false, forward: false });
   const [title, setTitle] = useState('');
+  // A Peek uses the same logins as the Space it was opened in.
+  const [partition] = useState(() => partitionForSpace(activeSpace(useKite.getState().s)));
 
   const expand = () => {
     const url = getUi().peek?.url ?? initial;
@@ -82,6 +86,7 @@ function PeekWindow({ id }: { id: string }) {
         </div>
         <div className="peek-body">
           <WebSurface
+            partition={partition}
             id={id}
             initialUrl={initial}
             visible

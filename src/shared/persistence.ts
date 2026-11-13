@@ -1,4 +1,5 @@
 import { sanitizeLook } from './look';
+import { sanitizeShields } from './shields';
 // Loading saved state safely: fill in anything missing, drop anything broken.
 
 import { createInitialState, defaultSettings, DEFAULT_SHORTCUTS, defaultTheme, STATE_VERSION } from './defaults';
@@ -31,6 +32,11 @@ export function loadState(raw: unknown): AppState {
   };
   state.settings.shortcuts = { ...DEFAULT_SHORTCUTS, ...(state.settings.shortcuts ?? {}) };
   state.settings.look = sanitizeLook(state.settings.look);
+  state.settings.shields = sanitizeShields(state.settings.shields);
+  if (!(state.settings.soundVolume >= 0 && state.settings.soundVolume <= 1)) state.settings.soundVolume = 0.4;
+  state.settings.sounds = state.settings.sounds !== false;
+  if (!(state.settings.motionSpeed >= 0.5 && state.settings.motionSpeed <= 2)) state.settings.motionSpeed = 1;
+  if (!['style', 'smooth', 'snappy', 'bouncy'].includes(state.settings.motionFeel)) state.settings.motionFeel = 'style';
   state.spaces = state.spaces.map((sp, i) => ({
     ...sp,
     name: sp.name || `Space ${i + 1}`,
@@ -38,6 +44,7 @@ export function loadState(raw: unknown): AppState {
     theme: { ...defaultTheme(i), ...(sp.theme ?? {}) },
     pinned: Array.isArray(sp.pinned) ? sp.pinned : [],
     today: Array.isArray(sp.today) ? sp.today : [],
+    isolated: sp.isolated === true ? true : undefined,
   }));
   repair(state);
   return state;

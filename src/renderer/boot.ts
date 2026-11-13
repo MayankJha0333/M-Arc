@@ -11,6 +11,8 @@ import { openUrl, runAction, autoArchiveNow, openInSplit, selectItem } from './c
 import { handleOpenRequest, handleExternalUrl } from './routingRuntime';
 import { watchBoosts } from './boostRuntime';
 import { startPip } from './pipRuntime';
+import { startBrowser } from './browserRuntime';
+import { startSounds } from './sound';
 
 /** All shortcuts including the numbered ones (⌘1…⌘9, ⌃1…⌃9). */
 export function fullShortcutMap(settings: Settings): Record<string, string> {
@@ -33,6 +35,8 @@ export async function boot() {
   startAutosave();
   watchBoosts();
   startPip();
+  startBrowser();
+  startSounds();
   const active = ops.activeItemId(state);
   if (active) {
     const it = state.items[active];

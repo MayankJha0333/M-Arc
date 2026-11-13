@@ -3,7 +3,7 @@ import { MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import type { ID, Space } from '@shared/types';
 import { ARCHIVE_CHOICES, THEME_PRESETS } from '@shared/defaults';
 import { createSpace, deleteSpace, setSpaceTheme, updateSpace, moveSpace } from '@shared/spaces';
-import { act, getS, setUi, useKite } from '../store';
+import { act, getS, setUi, toast, useKite } from '../store';
 import { actions, undoable, switchSpaceCmd } from '../commands';
 import { openMenu } from './ContextMenu';
 import { DropZone } from '../dnd';
@@ -15,6 +15,7 @@ export function SpaceHeader({ space }: { space: Space }) {
     <div className="space-header" data-testid="space-header" onDoubleClick={() => openSpaceEditor(space.id)}>
       <span className="space-icon">{space.icon}</span>
       <span className="space-name" data-testid="space-name">{space.name}</span>
+      {space.isolated && <span className="space-badge" title="This Space has its own logins and cookies" data-testid="space-isolated-badge">Separate logins</span>}
       <button className="icon-btn space-more" aria-label="Space menu" data-testid="space-menu" onClick={(e) => openMenu(e, spaceMenu(space.id))}>
         <MoreHorizontal size={16} />
       </button>
@@ -198,6 +199,22 @@ export function SpaceEditor({ id }: { id: ID }) {
       <Field label="Color strength" hint={`${Math.round(t.intensity * 100)}%`}>
         <input type="range" className="range" min={0} max={1} step={0.05} value={t.intensity} data-testid="space-intensity" onChange={(e) => set({ intensity: Number(e.target.value) })} />
       </Field>
+
+      <label className="field-inline space-isolated">
+        <Toggle
+          checked={!!space.isolated}
+          testId="space-isolated"
+          label="Separate logins for this Space"
+          onChange={(isolated) => {
+            act((d) => updateSpace(d, id, { isolated }));
+            toast(isolated ? `“${space.name}” now has its own logins and cookies. Its tabs reloaded.` : `“${space.name}” shares logins with your other Spaces again. Its tabs reloaded.`);
+          }}
+        />
+        <span>
+          <b>Separate logins for this Space</b>
+          <span className="muted">Its own cookies, sign-ins and site data, so you can use a second account on the same sites. Favorites stay shared.</span>
+        </span>
+      </label>
 
       <Field label="Archive unused tabs after" hint="Overrides the global setting for this Space">
         <select

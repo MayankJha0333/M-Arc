@@ -10,7 +10,8 @@ import { ContextMenuHost } from './components/ContextMenu';
 import { Toasts } from './components/Toasts';
 import { Panels } from './components/Panels';
 import { ZapHint } from './components/Boosts';
-import { isElectron, isMac } from './platform';
+import { bridge, desktopChrome, isMac } from './platform';
+import { useEffect } from 'react';
 import { useSystemDark } from './systemDark';
 
 export { useSystemDark };
@@ -35,6 +36,24 @@ function Shell() {
   const vars = useMemo(() => themeVars(theme, settings, systemDark), [theme, settings, systemDark]);
   const dark = resolveDark(theme, systemDark);
   const collapsed = settings.sidebarCollapsed;
+  const fullscreen = useKite((st) => st.ui.fullscreen);
+
+  useEffect(() => bridge.onWindowState((v) => setUi({ fullscreen: v.fullscreen })), []);
+  // macOS: the window's close/minimise/zoom buttons live in the sidebar's top corner,
+  // wherever the sidebar is, and hide with it. No empty band is kept above the page.
+  useEffect(() => {
+    if (!desktopChrome || !isMac) return;
+    const place = () => {
+      const peek = collapsed && sidebarPeek;
+      const inset = peek ? 6 : 0;
+      const x = settings.sidebarSide === 'left' ? inset + 16 : window.innerWidth - inset - settings.sidebarWidth + 14;
+      bridge.setWindowButtons({ visible: !fullscreen && (!collapsed || peek), x, y: inset + 16 });
+    };
+    place();
+    if (settings.sidebarSide !== 'right') return;
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
+  }, [collapsed, sidebarPeek, fullscreen, settings.sidebarSide, settings.sidebarWidth]);
 
   return (
     <div
@@ -49,7 +68,8 @@ function Shell() {
       data-collapsed={collapsed || undefined}
       data-sidebar-peek={(collapsed && sidebarPeek) || undefined}
       data-motion={settings.reduceMotion ? 'reduced' : 'full'}
-      data-electron={isElectron || undefined}
+      data-electron={desktopChrome || undefined}
+      data-fullscreen={fullscreen || undefined}
       data-mac={isMac || undefined}
       data-space={spaceId}
     >

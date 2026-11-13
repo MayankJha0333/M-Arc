@@ -76,6 +76,8 @@ export interface Space {
   pinned: ID[];
   /** Top-level unpinned items ("Today"), newest first. */
   today: ID[];
+  /** Its own cookies, logins and site data, separate from other Spaces. */
+  isolated?: boolean;
   /** Overrides the global auto-archive time for this Space. */
   archiveAfterMs?: number | null;
 }
@@ -132,6 +134,7 @@ export interface RouteRule {
 
 export type SidebarSide = 'left' | 'right';
 export type Density = 'compact' | 'comfortable' | 'roomy';
+export type MotionFeel = 'style' | 'smooth' | 'snappy' | 'bouncy';
 export type FontChoice = 'figtree' | 'bricolage' | 'inter' | 'system' | 'mono';
 
 export interface Settings {
@@ -166,6 +169,22 @@ export interface Settings {
   chromeCss: string;
   reduceMotion: boolean;
   tidyTitles: boolean;
+  /** Soft interface sounds (tabs, Spaces, downloads). */
+  sounds: boolean;
+  /** 0–1. */
+  soundVolume: number;
+  /** How fast Kite's animations run: 1 = normal, 2 = twice as fast. */
+  motionSpeed: number;
+  /** The feel of animations: the style's own, or one you pick. */
+  motionFeel: MotionFeel;
+  /** Ad and tracker blocking (see shared/shields.ts). */
+  shields: import('./shields').Shields;
+  /** Open sites over https whenever possible. */
+  httpsOnly: boolean;
+  /** Tell sites not to sell or share your data (Global Privacy Control). */
+  sendGpc: boolean;
+  /** Ask where to save each download. */
+  askWhereToSave: boolean;
   /** Visual style and its fine-tuning (see shared/look.ts). */
   look: import('./look').Look;
 }

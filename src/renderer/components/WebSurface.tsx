@@ -6,6 +6,7 @@ import { NONCE } from '../nonce';
 import { bridge, isElectron } from '../platform';
 import { registerSurface, type SurfaceHandle } from '../surfaces';
 import { fakePageHtml, fakeTitle } from '../fakePage';
+import { DEFAULT_PARTITION } from '@shared/profiles';
 
 export interface SurfaceEvents {
   onNavigate(url: string): void;
@@ -20,12 +21,16 @@ export interface SurfaceEvents {
   onEscape?(): void;
   /** A video or sound started (true) or stopped (false). */
   onMedia?(playing: boolean): void;
+  /** The page failed to load (null = a new load started, forget the failure). */
+  onFail?(err: { code: number; desc: string; url: string } | null): void;
 }
 
 interface Props extends SurfaceEvents {
   id: ID;
   initialUrl: string;
   visible: boolean;
+  /** Which cookie jar the page uses (see shared/profiles.ts). */
+  partition?: string;
 }
 
 /** A web page. Real <webview> in the app; a simulated page in test mode. */
@@ -33,7 +38,7 @@ export function WebSurface(props: Props) {
   return isElectron ? <ElectronSurface {...props} /> : <SimulatedSurface {...props} />;
 }
 
-function ElectronSurface({ id, initialUrl, visible, ...ev }: Props) {
+function ElectronSurface({ id, initialUrl, visible, partition = DEFAULT_PARTITION, ...ev }: Props) {
   const ref = useRef<WebviewTag | null>(null);
   const evRef = useRef(ev);
   evRef.current = ev;
@@ -96,6 +101,13 @@ function ElectronSurface({ id, initialUrl, visible, ...ev }: Props) {
     const onTitle = (e: Electron.PageTitleUpdatedEvent) => evRef.current.onTitle(e.title);
     const onFavicon = (e: Electron.PageFaviconUpdatedEvent) => e.favicons[0] && evRef.current.onFavicon(e.favicons[0]);
     const onStart = () => evRef.current.onLoading(true);
+    // -3 is "aborted": a redirect or the user stopping, not a failure.
+    const onFail = (e: Electron.DidFailLoadEvent) => {
+      if (e.isMainFrame && e.errorCode !== -3) evRef.current.onFail?.({ code: e.errorCode, desc: e.errorDescription, url: e.validatedURL });
+    };
+    const onStartNav = (e: Electron.DidStartNavigationEvent) => {
+      if (e.isMainFrame && !e.isInPlace) evRef.current.onFail?.(null);
+    };
     const onStop = () => {
       evRef.current.onLoading(false);
       nav();
@@ -128,6 +140,8 @@ function ElectronSurface({ id, initialUrl, visible, ...ev }: Props) {
     wv.addEventListener('page-favicon-updated', onFavicon);
     wv.addEventListener('did-start-loading', onStart);
     wv.addEventListener('did-stop-loading', onStop);
+    wv.addEventListener('did-fail-load', onFail);
+    wv.addEventListener('did-start-navigation', onStartNav);
     wv.addEventListener('console-message', onConsole);
     wv.addEventListener('focus', onFocus);
     return () => {
@@ -140,6 +154,8 @@ function ElectronSurface({ id, initialUrl, visible, ...ev }: Props) {
       wv.removeEventListener('page-favicon-updated', onFavicon);
       wv.removeEventListener('did-start-loading', onStart);
       wv.removeEventListener('did-stop-loading', onStop);
+      wv.removeEventListener('did-fail-load', onFail);
+      wv.removeEventListener('did-start-navigation', onStartNav);
       wv.removeEventListener('console-message', onConsole);
       wv.removeEventListener('focus', onFocus);
       wv.removeEventListener('media-started-playing', onPlay);
@@ -154,7 +170,7 @@ function ElectronSurface({ id, initialUrl, visible, ...ev }: Props) {
       data-testid={`surface-${id}`}
       data-visible={visible ? 'true' : 'false'}
       src={src.current}
-      partition="persist:kite"
+      partition={partition}
       allowpopups={'true' as never}
       webpreferences="contextIsolation=yes, sandbox=yes"
     />
@@ -162,7 +178,7 @@ function ElectronSurface({ id, initialUrl, visible, ...ev }: Props) {
 }
 
 /** Test mode: a generated page in an iframe that behaves like a small website. */
-function SimulatedSurface({ id, initialUrl, visible, ...ev }: Props) {
+function SimulatedSurface({ id, initialUrl, visible, partition = DEFAULT_PARTITION, ...ev }: Props) {
   const ref = useRef<HTMLIFrameElement | null>(null);
   const evRef = useRef(ev);
   evRef.current = ev;
@@ -317,6 +333,7 @@ function SimulatedSurface({ id, initialUrl, visible, ...ev }: Props) {
       title={`page-${id}`}
       data-testid={`surface-${id}`}
       data-visible={visible ? 'true' : 'false'}
+      data-partition={partition}
       sandbox="allow-same-origin allow-scripts"
     />
   );

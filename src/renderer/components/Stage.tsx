@@ -13,6 +13,8 @@ import { SplitChrome, splitRects, paneStyle } from './SplitView';
 import { NoteEditor } from './NoteEditor';
 import { Peek } from './Peek';
 import { DropZone } from '../dnd';
+import { partitionForTab } from '@shared/profiles';
+import { LoadError } from './LoadError';
 
 type Rect = { left: number; top: number; width: number; height: number };
 const FULL: Rect = { left: 0, top: 0, width: 100, height: 100 };
@@ -58,6 +60,9 @@ export function Stage() {
 function SurfaceSlot({ id, rect, focusedInSplit, inSplit }: { id: ID; rect?: Rect; focusedInSplit: boolean; inSplit: boolean }) {
   const item = useKite((st) => st.s.items[id]) as Extract<Item, { kind: 'tab' }>;
   usePolicySync(id, false);
+  // A tab moved into (or out of) an isolated Space reloads with that Space's cookie jar.
+  const partition = useKite((st) => partitionForTab(st.s, id));
+  const error = useKite((st) => st.ui.loadError[id]);
   const visible = !!rect;
   const style = rect
     ? inSplit
@@ -67,9 +72,12 @@ function SurfaceSlot({ id, rect, focusedInSplit, inSplit }: { id: ID; rect?: Rec
   return (
     <div className="surface-slot" data-visible={visible || undefined} data-focused={focusedInSplit || undefined} data-split={inSplit || undefined} style={style} data-testid={`slot-${id}`}>
       <WebSurface
+        key={partition}
+        partition={partition}
         id={id}
         initialUrl={item.url}
         visible={visible}
+        onFail={(err) => setUi((u) => (u.loadError[id] === err || (!err && !u.loadError[id]) ? {} : { loadError: { ...u.loadError, [id]: err ?? undefined } }))}
         onNavigate={(url) => act((d) => ops.updateTab(d, id, { url }, now()))}
         onTitle={(title) => act((d) => ops.updateTab(d, id, { title }, now()))}
         onFavicon={(favicon) => act((d) => ops.updateTab(d, id, { favicon }, now()))}
@@ -88,6 +96,7 @@ function SurfaceSlot({ id, rect, focusedInSplit, inSplit }: { id: ID; rect?: Rec
           if (it?.kind === 'split' && it.panes.includes(id) && it.panes[it.focused] !== id) act((d) => ops.select(d, id, now()));
         }}
       />
+      {error && visible && <LoadError id={id} error={error} />}
     </div>
   );
 }

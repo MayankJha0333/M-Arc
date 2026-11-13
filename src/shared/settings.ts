@@ -1,9 +1,12 @@
 // Changing settings safely (values are kept within sensible limits).
 
 import { DEFAULT_SHORTCUTS, defaultSettings } from './defaults';
-import type { AppState, Settings } from './types';
+import type { AppState, MotionFeel, Settings } from './types';
+import { sanitizeShields } from './shields';
 import { defaultLook, sanitizeLook, styleById, type StyleId } from './look';
 import { loadState, serialize } from './persistence';
+
+export const MOTION_FEELS: MotionFeel[] = ['style', 'smooth', 'snappy', 'bouncy'];
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
@@ -14,6 +17,8 @@ export const LIMITS = {
   gap: [0, 20],
   favoritesColumns: [3, 6],
   awakeTabs: [3, 30],
+  motionSpeed: [0.5, 2],
+  soundVolume: [0, 1],
 } as const;
 
 export function updateSettings(s: AppState, patch: Partial<Settings>): void {
@@ -21,9 +26,12 @@ export function updateSettings(s: AppState, patch: Partial<Settings>): void {
   for (const [k, [lo, hi]] of Object.entries(LIMITS)) {
     const key = k as keyof typeof LIMITS;
     const v = Number(next[key]);
-    (next as Record<string, unknown>)[key] = Number.isFinite(v) ? clamp(key === 'fontScale' ? v : Math.round(v), lo, hi) : defaultSettings()[key];
+    (next as Record<string, unknown>)[key] = Number.isFinite(v) ? clamp(key === 'fontScale' || key === 'motionSpeed' || key === 'soundVolume' ? v : Math.round(v), lo, hi) : defaultSettings()[key];
   }
   next.look = sanitizeLook(next.look);
+  next.shields = sanitizeShields(next.shields);
+  if (!MOTION_FEELS.includes(next.motionFeel)) next.motionFeel = 'style';
+  for (const k of ['httpsOnly', 'sendGpc', 'askWhereToSave', 'sounds'] as const) next[k] = !!next[k];
   if (typeof next.searchEngine !== 'string' || !next.searchEngine.includes('%s') || !/^https?:\/\//i.test(next.searchEngine)) next.searchEngine = s.settings.searchEngine;
   s.settings = next;
 }
@@ -31,7 +39,7 @@ export function updateSettings(s: AppState, patch: Partial<Settings>): void {
 /** Appearance back to defaults (keeps shortcuts, archive and search choices). */
 export function resetAppearance(s: AppState): void {
   const d = defaultSettings();
-  const keys: (keyof Settings)[] = ['sidebarSide', 'sidebarWidth', 'density', 'font', 'fontScale', 'radius', 'gap', 'showUrlBar', 'showTabCloseOnHover', 'favoritesColumns', 'reduceMotion', 'chromeCss', 'look'];
+  const keys: (keyof Settings)[] = ['sidebarSide', 'sidebarWidth', 'density', 'font', 'fontScale', 'radius', 'gap', 'showUrlBar', 'showTabCloseOnHover', 'favoritesColumns', 'reduceMotion', 'motionSpeed', 'motionFeel', 'sounds', 'soundVolume', 'chromeCss', 'look'];
   for (const k of keys) (s.settings as unknown as Record<string, unknown>)[k] = d[k];
 }
 

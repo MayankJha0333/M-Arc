@@ -33,11 +33,12 @@ export function deleteSpace(s: AppState, id: ID, now: number): boolean {
   return true;
 }
 
-export function updateSpace(s: AppState, id: ID, patch: { name?: string; icon?: string; archiveAfterMs?: number | null | undefined }): void {
+export function updateSpace(s: AppState, id: ID, patch: { name?: string; icon?: string; archiveAfterMs?: number | null | undefined; isolated?: boolean }): void {
   const sp = s.spaces.find((x) => x.id === id);
   if (!sp) return;
   if (patch.name !== undefined && patch.name.trim()) sp.name = patch.name.trim();
   if (patch.icon !== undefined && patch.icon.trim()) sp.icon = [...patch.icon.trim()].slice(0, 2).join('');
+  if (patch.isolated !== undefined) sp.isolated = patch.isolated || undefined;
   if ('archiveAfterMs' in patch) sp.archiveAfterMs = patch.archiveAfterMs;
 }
 

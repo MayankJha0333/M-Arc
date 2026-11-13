@@ -5,6 +5,8 @@ import { BoostEditor, BoostsList } from './Boosts';
 import { RoutingPanel } from './Routing';
 import { ImportArc } from './ImportArc';
 import { SettingsPanel } from './Settings';
+import { DownloadsPanel } from './Downloads';
+import { ExtensionsPanel } from './Extensions';
 
 /** Side sheets (Settings, Archive, Boosts, Space editor…). */
 export function Panels() {
@@ -17,6 +19,8 @@ export function Panels() {
   if (panel === 'routing') return <RoutingPanel />;
   if (panel === 'import') return <ImportArc />;
   if (panel === 'settings') return <SettingsPanel key={arg ?? 'appearance'} initial={arg} />;
+  if (panel === 'downloads') return <DownloadsPanel />;
+  if (panel === 'extensions') return <ExtensionsPanel />;
   if (panel === 'shortcuts') return <SettingsPanel key="keys" initial="keys" />;
   return null;
 }
