@@ -95,6 +95,9 @@ export function navigateTab(id: ID, url: string) {
 }
 
 export function selectItem(id: ID) {
+  // Picking a tab (even the one already selected) leaves the Settings page.
+  const p = useKite.getState().ui.panel;
+  if (p === 'settings' || p === 'shortcuts') setUi({ panel: null, panelArg: undefined });
   act((d) => ops.select(d, id, now()));
   const it = getS().items[id];
   if (it?.kind === 'tab') markLoaded(id);

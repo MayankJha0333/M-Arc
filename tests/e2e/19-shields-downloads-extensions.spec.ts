@@ -52,7 +52,7 @@ test.describe('Shields and privacy settings', () => {
     await page.getByTestId('shields-refresh').click();
     await expect(page.getByTestId('shields-status')).toContainText('Full filter lists');
     await page.getByTestId('shields-enabled').click();
-    await expect(page.locator('.settings-sub')).toHaveAttribute('data-off', 'true');
+    await expect(page.locator('.set-row[data-sub][data-off]')).toHaveCount(4);
     await expect(page.getByTestId('shields-refresh')).toHaveCount(0);
   });
 

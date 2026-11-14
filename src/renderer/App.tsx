@@ -37,6 +37,7 @@ function Shell() {
   const dark = resolveDark(theme, systemDark);
   const collapsed = settings.sidebarCollapsed;
   const fullscreen = useKite((st) => st.ui.fullscreen);
+  const onSettings = useKite((st) => st.ui.panel === 'settings' || st.ui.panel === 'shortcuts');
 
   useEffect(() => bridge.onWindowState((v) => setUi({ fullscreen: v.fullscreen })), []);
   // macOS: the window's close/minimise/zoom buttons live in the sidebar's top corner,
@@ -47,7 +48,10 @@ function Shell() {
       const peek = collapsed && sidebarPeek;
       const inset = peek ? 6 : 0;
       const x = settings.sidebarSide === 'left' ? inset + 16 : window.innerWidth - inset - settings.sidebarWidth + 14;
-      bridge.setWindowButtons({ visible: !fullscreen && (!collapsed || peek), x, y: inset + 16 });
+      // Full screen: macOS shows the buttons itself when you move to the top edge, like
+      // every other app, so they are left on and nothing in Kite is reserved for them.
+      if (fullscreen) return bridge.setWindowButtons({ visible: true, x: 16, y: 16 });
+      bridge.setWindowButtons({ visible: !collapsed || peek, x, y: inset + 16 });
     };
     place();
     if (settings.sidebarSide !== 'right') return;
@@ -72,10 +76,11 @@ function Shell() {
       data-fullscreen={fullscreen || undefined}
       data-mac={isMac || undefined}
       data-space={spaceId}
+      data-page={onSettings ? 'settings' : undefined}
     >
       <div className="grain" aria-hidden="true" />
       <Sidebar />
-      {collapsed && <div className="edge-hotzone" data-testid="edge-hotzone" onMouseEnter={() => setUi({ sidebarPeek: true })} />}
+      {collapsed && <EdgeHotzone side={settings.sidebarSide} />}
       {collapsed && sidebarPeek && <div className="sidebar-peek-catcher" onMouseEnter={() => setUi({ sidebarPeek: false })} />}
       <Stage />
       <CommandBar />
@@ -85,5 +90,40 @@ function Shell() {
       <Toasts />
       {settings.chromeCss && <style data-testid="chrome-css">{settings.chromeCss}</style>}
     </div>
+  );
+}
+
+/**
+ * Brings the hidden sidebar out when you move the pointer to its side of the window.
+ *
+ * Two ways in, because a normal flick to the side is fast:
+ * - the pointer moving inside the thin strip along the edge, and
+ * - the pointer leaving the window through that side (when the window doesn't touch
+ *   the screen edge, the pointer flies past the strip without ever landing in it).
+ * It never reacts to the pointer merely resting there when the sidebar hides.
+ * In the desktop app the strip is "no-drag" (see app.css): the margin around the page
+ * moves the window, and macOS sends no mouse events to the app there.
+ */
+function EdgeHotzone({ side }: { side: 'left' | 'right' }) {
+  useEffect(() => {
+    const open = () => !useKite.getState().ui.sidebarPeek && setUi({ sidebarPeek: true });
+    const out = (e: MouseEvent) => {
+      if (e.relatedTarget) return; // still inside the window
+      const h = window.innerHeight;
+      if (e.clientY <= 4 || e.clientY >= h - 4) return; // left through the top or bottom
+      const nearSide = side === 'left' ? e.clientX <= 24 : e.clientX >= window.innerWidth - 24;
+      if (nearSide) open();
+    };
+    document.addEventListener('mouseout', out);
+    return () => document.removeEventListener('mouseout', out);
+  }, [side]);
+  return (
+    <div
+      className="edge-hotzone"
+      data-testid="edge-hotzone"
+      onPointerMove={() => {
+        if (!useKite.getState().ui.sidebarPeek) setUi({ sidebarPeek: true });
+      }}
+    />
   );
 }

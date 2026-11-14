@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { ID, Item } from '@shared/types';
 import * as ops from '@shared/ops';
 import { formatShortcut } from '@shared/shortcuts';
@@ -15,6 +15,8 @@ import { Peek } from './Peek';
 import { DropZone } from '../dnd';
 import { partitionForTab } from '@shared/profiles';
 import { LoadError } from './LoadError';
+import { SettingsPanel } from './Settings';
+import { PanelGuard } from './Panels';
 
 type Rect = { left: number; top: number; width: number; height: number };
 const FULL: Rect = { left: 0, top: 0, width: 100, height: 100 };
@@ -29,6 +31,15 @@ export function Stage() {
     return t ? !!st.ui.loading[t.id] : false;
   });
   const loaded = useMemo(() => loadedRaw.filter((id) => items[id]?.kind === 'tab'), [loadedRaw, items]);
+  const settingsPage = useKite((st) => (st.ui.panel === 'settings' ? st.ui.panelArg ?? 'appearance' : st.ui.panel === 'shortcuts' ? 'keys' : null));
+  // Going to another tab (or a new one, or another Space) leaves Settings, like leaving a page.
+  const lastActive = useRef(activeId);
+  useEffect(() => {
+    if (lastActive.current === activeId) return;
+    lastActive.current = activeId;
+    const p = useKite.getState().ui.panel;
+    if (p === 'settings' || p === 'shortcuts') setUi({ panel: null, panelArg: undefined });
+  }, [activeId]);
 
   const rects = useMemo<Record<ID, Rect>>(() => {
     if (!active) return {};
@@ -51,6 +62,11 @@ export function Stage() {
         {active?.kind === 'note' && <NoteEditor key={active.id} note={active} />}
         {!active && <EmptyState />}
         <FindBar />
+        {settingsPage && (
+          <PanelGuard key={settingsPage}>
+            <SettingsPanel initial={settingsPage} />
+          </PanelGuard>
+        )}
       </DropZone>
       <Peek />
     </main>

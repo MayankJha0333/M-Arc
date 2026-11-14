@@ -143,9 +143,10 @@ export function themeVars(theme: SpaceTheme, settings: Settings, systemDark: boo
   const lineRgb = dark ? '255,255,255' : '40,30,20';
   const ringA = (dark ? 0.06 : 0.06) * (look.border / 0.35);
   const depth = look.shadow / 0.5;
+  // A hairline ring, a tight contact shadow and a soft ambient one: depth without a grey halo.
   const shadow = dark
-    ? `0 0 0 1px rgba(255,255,255,${Math.min(0.2, ringA).toFixed(3)})${look.shadow > 0 ? `, 0 12px 32px rgba(0,0,0,${Math.min(0.8, 0.45 * depth).toFixed(3)})` : ''}`
-    : `0 0 0 1px rgba(60,40,20,${Math.min(0.2, ringA).toFixed(3)})${look.shadow > 0 ? `, 0 10px 30px rgba(60,40,20,${Math.min(0.3, 0.12 * depth).toFixed(3)})` : ''}`;
+    ? `0 0 0 1px rgba(255,255,255,${Math.min(0.2, ringA).toFixed(3)})${look.shadow > 0 ? `, 0 1px 2px rgba(0,0,0,${Math.min(0.5, 0.3 * depth).toFixed(3)}), 0 14px 36px -8px rgba(0,0,0,${Math.min(0.8, 0.5 * depth).toFixed(3)})` : ''}`
+    : `0 0 0 1px rgba(60,40,20,${Math.min(0.2, ringA).toFixed(3)})${look.shadow > 0 ? `, 0 1px 2px rgba(60,40,20,${Math.min(0.12, 0.05 * depth).toFixed(3)}), 0 14px 36px -8px rgba(60,40,20,${Math.min(0.32, 0.15 * depth).toFixed(3)})` : ''}`;
   const glassy = look.translucency;
   const overlayA = 0.94 - glassy * 0.22;
   return {

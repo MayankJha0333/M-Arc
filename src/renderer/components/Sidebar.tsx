@@ -17,7 +17,7 @@ import { SecurityIcon, SiteInfo, useSecurity } from './SiteInfo';
 import { DownloadsButton } from './Downloads';
 
 export function Sidebar() {
-    const showUrl = useKite((st) => st.s.settings.showUrlBar);
+  const showUrl = useKite((st) => st.s.settings.showUrlBar);
   const space = useKite((st) => activeSpace(st.s));
   const shortcuts = useKite((st) => st.s.settings.shortcuts);
   const width = useKite((st) => st.s.settings.sidebarWidth);
@@ -54,7 +54,7 @@ export function Sidebar() {
             <ItemRow key={id} id={id} list="pinned" depth={0} />
           ))}
           <DropZone zone={{ type: 'end', list: 'pinned', spaceId: space.id }} className="list-end" testId="pinned-end">
-            {space.pinned.length === 0 && <span className="hint">Drag tabs here to pin them</span>}
+            {space.pinned.length === 0 && <span className="hint drop-hint">Drop here to pin</span>}
           </DropZone>
         </section>
 

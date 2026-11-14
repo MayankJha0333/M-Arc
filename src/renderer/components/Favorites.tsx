@@ -12,7 +12,7 @@ export function Favorites() {
   const favs = useKite((st) => st.s.favorites);
   const cols = useKite((st) => st.s.settings.favoritesColumns);
   return (
-    <DropZone zone={{ type: 'end', list: 'favorites', spaceId: null }} className="favorites-zone" testId="favorites">
+    <DropZone zone={{ type: 'end', list: 'favorites', spaceId: null }} className="favorites-zone" testId="favorites" data-empty={favs.length === 0 || undefined}>
       {favs.length > 0 ? (
         <div className="favorites" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }} role="list">
           {favs.map((id) => (
@@ -20,7 +20,8 @@ export function Favorites() {
           ))}
         </div>
       ) : (
-        <div className="favorites-empty">Drop tabs here for Favorites</div>
+        // Takes no room until you drag a tab, then opens up as a drop target.
+        <div className="favorites-empty">Drop here to add to Favorites</div>
       )}
     </DropZone>
   );

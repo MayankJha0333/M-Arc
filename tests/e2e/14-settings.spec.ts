@@ -173,3 +173,69 @@ test.describe('settings: tabs, search, keyboard, data', () => {
     await expect(page.getByTestId('boosts-list')).toBeVisible();
   });
 });
+
+test.describe('settings layout and search', () => {
+  test('search narrows the sections, jumps to the match, and Esc clears it before closing', async ({ page }) => {
+    await openApp(page);
+    await page.keyboard.press(`${MOD}+Comma`);
+    const tabs = page.locator('.settings-tab');
+    await expect(tabs).toHaveCount(7);
+    await page.getByTestId('settings-search').fill('cookie');
+    await expect(tabs).toHaveCount(1);
+    await expect(page.getByTestId('settings-privacy')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.settings-head-title')).toHaveText('Privacy & Security');
+    await expect(page.locator('[data-hit]')).toContainText('Cookie banners');
+    await page.getByTestId('settings-search').fill('nothing like this');
+    await expect(page.getByTestId('settings-nomatch')).toBeVisible();
+    await page.getByTestId('settings-search').press('Escape');
+    await expect(page.getByTestId('settings-search')).toHaveValue('');
+    await expect(tabs).toHaveCount(7);
+    await expect(page.getByTestId('settings')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('settings')).toHaveCount(0);
+  });
+
+  test('a section keeps one size: switching sections does not resize the window', async ({ page }) => {
+    await openApp(page);
+    await page.keyboard.press(`${MOD}+Comma`);
+    const a = (await page.getByTestId('settings').boundingBox())!;
+    await page.getByTestId('settings-about').click();
+    const b = (await page.getByTestId('settings').boundingBox())!;
+    expect([b.width, b.height]).toEqual([a.width, a.height]);
+  });
+});
+
+test.describe('sidebar: no empty placeholders', () => {
+  test('with no Favorites or pinned tabs, nothing empty sits between the address bar and the tabs', async ({ page }) => {
+    await openApp(page);
+    await newTab(page, 'a.com');
+    const pill = (await page.getByTestId('url-pill').boundingBox())!;
+    const header = (await page.getByTestId('space-header').boundingBox())!;
+    expect(header.y - (pill.y + pill.height)).toBeLessThanOrEqual(16);
+    await expect(page.getByText('Drop here to add to Favorites')).toBeHidden();
+    await expect(page.getByText('Drop here to pin')).toBeHidden();
+  });
+});
+
+test.describe('settings is a page, not a dialog', () => {
+  test('it fills the page area, the sidebar stays usable, and picking a tab goes back to it', async ({ page }) => {
+    await openApp(page);
+    await newTab(page, 'a.com');
+    await newTab(page, 'b.com');
+    await page.keyboard.press(`${MOD}+Comma`);
+    const card = (await page.getByTestId('page-card').boundingBox())!;
+    const settings = (await page.getByTestId('settings').boundingBox())!;
+    expect([settings.x, settings.y, settings.width, settings.height]).toEqual([card.x, card.y, card.width, card.height]);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    // The tab you were on: clicking it leaves Settings.
+    await todayRows(page).first().click();
+    await expect(page.getByTestId('settings')).toHaveCount(0);
+    // Another tab works too, and so does a new one.
+    await page.keyboard.press(`${MOD}+Comma`);
+    await todayRows(page).nth(1).click();
+    await expect(page.getByTestId('settings')).toHaveCount(0);
+    await page.keyboard.press(`${MOD}+Comma`);
+    await newTab(page, 'c.com');
+    await expect(page.getByTestId('settings')).toHaveCount(0);
+  });
+});

@@ -64,7 +64,7 @@ export const STYLES: readonly StyleDef[] = [
     dark: { base: '#16171c', card: '#1f2027', ink: '#f1efea', tint: [0.12, 0.38] },
     activeRow: 'lift',
     defaults: { backdrop: 'gradient', border: 0.35, shadow: 0.5, translucency: 0, radius: 12, gap: 8, density: 'comfortable', font: 'figtree' },
-    motion: { ease: 'cubic-bezier(0.2, 0.8, 0.2, 1)', ms: 220 },
+    motion: { ease: 'cubic-bezier(0.16, 1, 0.3, 1)', ms: 220 },
   },
   {
     id: 'glass',
@@ -108,7 +108,7 @@ export const STYLES: readonly StyleDef[] = [
     dark: { base: '#0a0a0f', card: '#14141c', ink: '#f2f0fa', tint: [0.3, 0.7] },
     activeRow: 'glow',
     defaults: { backdrop: 'mesh', border: 0.4, shadow: 0.85, translucency: 0.35, radius: 14, gap: 8, density: 'comfortable', font: 'inter' },
-    motion: { ease: 'cubic-bezier(0.34, 1.3, 0.64, 1)', ms: 260 },
+    motion: { ease: 'cubic-bezier(0.34, 1.18, 0.64, 1)', ms: 260 },
   },
 ];
 
@@ -294,6 +294,9 @@ export const THEMES: readonly ThemePreset[] = [
   { id: 'ember', name: 'Ember', note: 'Bold and warm', style: 'studio', colors: ['#ffc59e', '#e0483a'], intensity: 0.35, grain: true },
   { id: 'sakura', name: 'Sakura', note: 'Gentle pink', style: 'calm', colors: ['#ffd3de', '#d9557a'], intensity: 0.45, grain: true },
   { id: 'moss', name: 'Moss', note: 'Quiet green', style: 'paper', colors: ['#cfe0a6', '#5c8a3e'], intensity: 0.7, grain: false },
+  // Clear glass over a cool field, like the newest system look, but kept readable.
+  { id: 'tahoe', name: 'Tahoe', note: 'Clear glass, cool blue', style: 'glass', colors: ['#d7e3f4', '#3d6fe0'], intensity: 0.45, grain: false, look: { backdrop: 'gradient', translucency: 0.55 } },
+  { id: 'dusk', name: 'Dusk', note: 'Soft periwinkle evening', style: 'calm', colors: ['#d8d3fa', '#5b4fd6'], intensity: 0.5, grain: true },
 ];
 
 /** The theme a new copy of Kite starts with. */

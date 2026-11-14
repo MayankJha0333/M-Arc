@@ -1,0 +1,394 @@
+diff --git a/src/renderer/App.tsx b/src/renderer/App.tsx
+index 2ffb01c..786d2aa 100644
+--- a/src/renderer/App.tsx
++++ b/src/renderer/App.tsx
+@@ -37,6 +37,7 @@ function Shell() {
+   const dark = resolveDark(theme, systemDark);
+   const collapsed = settings.sidebarCollapsed;
+   const fullscreen = useKite((st) => st.ui.fullscreen);
++  const onSettings = useKite((st) => st.ui.panel === 'settings' || st.ui.panel === 'shortcuts');
+ 
+   useEffect(() => bridge.onWindowState((v) => setUi({ fullscreen: v.fullscreen })), []);
+   // macOS: the window's close/minimise/zoom buttons live in the sidebar's top corner,
+@@ -75,6 +76,7 @@ function Shell() {
+       data-fullscreen={fullscreen || undefined}
+       data-mac={isMac || undefined}
+       data-space={spaceId}
++      data-page={onSettings ? 'settings' : undefined}
+     >
+       <div className="grain" aria-hidden="true" />
+       <Sidebar />
+diff --git a/src/renderer/commands.ts b/src/renderer/commands.ts
+index c56a6a7..72fa72e 100644
+--- a/src/renderer/commands.ts
++++ b/src/renderer/commands.ts
+@@ -95,6 +95,9 @@ export function navigateTab(id: ID, url: string) {
+ }
+ 
+ export function selectItem(id: ID) {
++  // Picking a tab (even the one already selected) leaves the Settings page.
++  const p = useKite.getState().ui.panel;
++  if (p === 'settings' || p === 'shortcuts') setUi({ panel: null, panelArg: undefined });
+   act((d) => ops.select(d, id, now()));
+   const it = getS().items[id];
+   if (it?.kind === 'tab') markLoaded(id);
+diff --git a/src/renderer/components/Panels.tsx b/src/renderer/components/Panels.tsx
+index 7283b8f..7e89be4 100644
+--- a/src/renderer/components/Panels.tsx
++++ b/src/renderer/components/Panels.tsx
+@@ -5,7 +5,6 @@ import { ArchivePage } from './ArchivePage';
+ import { BoostEditor, BoostsList } from './Boosts';
+ import { RoutingPanel } from './Routing';
+ import { ImportArc } from './ImportArc';
+-import { SettingsPanel } from './Settings';
+ import { DownloadsPanel } from './Downloads';
+ import { ExtensionsPanel } from './Extensions';
+ 
+@@ -20,7 +19,7 @@ export function Panels() {
+   );
+ }
+ 
+-class PanelGuard extends Component<{ children: ReactNode }, { failed: boolean }> {
++export class PanelGuard extends Component<{ children: ReactNode }, { failed: boolean }> {
+   state = { failed: false };
+   static getDerivedStateFromError() {
+     return { failed: true };
+@@ -44,9 +43,8 @@ function PanelSwitch() {
+   if (panel === 'boosts') return <BoostsList />;
+   if (panel === 'routing') return <RoutingPanel />;
+   if (panel === 'import') return <ImportArc />;
+-  if (panel === 'settings') return <SettingsPanel key={arg ?? 'appearance'} initial={arg} />;
++  // Settings is a page inside the page area (see Stage), not a sheet.
+   if (panel === 'downloads') return <DownloadsPanel />;
+   if (panel === 'extensions') return <ExtensionsPanel />;
+-  if (panel === 'shortcuts') return <SettingsPanel key="keys" initial="keys" />;
+   return null;
+ }
+diff --git a/src/renderer/components/Settings.tsx b/src/renderer/components/Settings.tsx
+index 962dde0..222a094 100644
+--- a/src/renderer/components/Settings.tsx
++++ b/src/renderer/components/Settings.tsx
+@@ -9,7 +9,7 @@ import type { Settings as S } from '@shared/types';
+ import { activeSpace } from '@shared/tree';
+ import { act, getS, setUi, toast, useKite } from '../store';
+ import { bridge, isMac } from '../platform';
+-import { Sheet, Segmented, Group, Row, SwitchRow } from './Sheet';
++import { Page, Segmented, Group, Row, SwitchRow } from './Sheet';
+ import { KiteLogo } from './KiteLogo';
+ import { openSpaceEditor } from './Spaces';
+ import { LookStudio, setLayout, useEffectiveLook } from './LookStudio';
+@@ -80,7 +80,7 @@ export function SettingsPanel({ initial }: { initial?: string }) {
+   }, [query, section]);
+   const def = SECTIONS.find((x) => x.id === section)!;
+   return (
+-    <Sheet title="Settings" testId="settings" variant="split">
++    <Page title="Settings" testId="settings">
+       <div className="settings">
+         <nav className="settings-nav" aria-label="Settings sections">
+           <div className="settings-brand">Settings</div>
+@@ -139,7 +139,7 @@ export function SettingsPanel({ initial }: { initial?: string }) {
+           </div>
+         </div>
+       </div>
+-    </Sheet>
++    </Page>
+   );
+ }
+ 
+diff --git a/src/renderer/components/Sheet.tsx b/src/renderer/components/Sheet.tsx
+index db521b5..b8c0282 100644
+--- a/src/renderer/components/Sheet.tsx
++++ b/src/renderer/components/Sheet.tsx
+@@ -4,8 +4,8 @@ import { setUi } from '../store';
+ import { playSound } from '../sound';
+ 
+ /** A centered panel used for Settings, Archive, Boosts, the Space editor… */
+-export function Sheet({ title, subtitle, children, onClose, testId, wide, footer, variant }: { title: React.ReactNode; subtitle?: React.ReactNode; children: React.ReactNode; onClose?: () => void; testId?: string; wide?: boolean; footer?: React.ReactNode; /** 'split': no header; the content draws its own (Settings). */ variant?: 'split' }) {
+-  const close = onClose ?? (() => setUi({ panel: null, panelArg: undefined }));
++/** Esc closes the panel, except while a shortcut is being recorded. */
++function useEscToClose(close: () => void) {
+   useEffect(() => {
+     const key = (e: KeyboardEvent) => {
+       if (e.key === 'Escape' && !(e.target as HTMLElement).closest?.('[data-recording="true"]')) {
+@@ -16,18 +16,32 @@ export function Sheet({ title, subtitle, children, onClose, testId, wide, footer
+     window.addEventListener('keydown', key);
+     return () => window.removeEventListener('keydown', key);
+   }, [close]);
++}
++
++const closePanel = () => setUi({ panel: null, panelArg: undefined });
++
++/**
++ * A full page inside the page area (Settings): the sidebar stays usable beside it,
++ * picking any tab goes back to it, and Esc or the close button returns to your page.
++ */
++export function Page({ title, children, testId }: { title: string; children: React.ReactNode; testId?: string }) {
++  useEscToClose(closePanel);
++  return (
++    <section className="kite-page" role="region" aria-label={title} data-testid={testId}>
++      <button className="icon-btn page-close" aria-label={`Close ${title}`} title={`Close ${title} (esc)`} data-testid="sheet-close" onClick={closePanel}>
++        <X size={16} />
++      </button>
++      {children}
++    </section>
++  );
++}
++
++export function Sheet({ title, subtitle, children, onClose, testId, wide, footer }: { title: React.ReactNode; subtitle?: React.ReactNode; children: React.ReactNode; onClose?: () => void; testId?: string; wide?: boolean; footer?: React.ReactNode }) {
++  const close = onClose ?? closePanel;
++  useEscToClose(close);
+   return (
+     <div className="sheet-scrim" onMouseDown={(e) => e.target === e.currentTarget && close()}>
+-      <section className="sheet" data-wide={wide || undefined} data-variant={variant} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined} data-testid={testId}>
+-        {variant === 'split' ? (
+-          <>
+-            <button className="icon-btn sheet-close-float" aria-label="Close" data-testid="sheet-close" onClick={close}>
+-              <X size={16} />
+-            </button>
+-            {children}
+-          </>
+-        ) : (
+-          <>
++      <section className="sheet" data-wide={wide || undefined} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined} data-testid={testId}>
+         <header className="sheet-head">
+           <div>
+             <h2 className="sheet-title">{title}</h2>
+@@ -39,8 +53,6 @@ export function Sheet({ title, subtitle, children, onClose, testId, wide, footer
+         </header>
+         <div className="sheet-body">{children}</div>
+         {footer && <footer className="sheet-foot">{footer}</footer>}
+-          </>
+-        )}
+       </section>
+     </div>
+   );
+diff --git a/src/renderer/components/Stage.tsx b/src/renderer/components/Stage.tsx
+index fce69f4..f948c74 100644
+--- a/src/renderer/components/Stage.tsx
++++ b/src/renderer/components/Stage.tsx
+@@ -1,4 +1,4 @@
+-import { useMemo } from 'react';
++import { useEffect, useMemo, useRef } from 'react';
+ import type { ID, Item } from '@shared/types';
+ import * as ops from '@shared/ops';
+ import { formatShortcut } from '@shared/shortcuts';
+@@ -15,6 +15,8 @@ import { Peek } from './Peek';
+ import { DropZone } from '../dnd';
+ import { partitionForTab } from '@shared/profiles';
+ import { LoadError } from './LoadError';
++import { SettingsPanel } from './Settings';
++import { PanelGuard } from './Panels';
+ 
+ type Rect = { left: number; top: number; width: number; height: number };
+ const FULL: Rect = { left: 0, top: 0, width: 100, height: 100 };
+@@ -29,6 +31,15 @@ export function Stage() {
+     return t ? !!st.ui.loading[t.id] : false;
+   });
+   const loaded = useMemo(() => loadedRaw.filter((id) => items[id]?.kind === 'tab'), [loadedRaw, items]);
++  const settingsPage = useKite((st) => (st.ui.panel === 'settings' ? st.ui.panelArg ?? 'appearance' : st.ui.panel === 'shortcuts' ? 'keys' : null));
++  // Going to another tab (or a new one, or another Space) leaves Settings, like leaving a page.
++  const lastActive = useRef(activeId);
++  useEffect(() => {
++    if (lastActive.current === activeId) return;
++    lastActive.current = activeId;
++    const p = useKite.getState().ui.panel;
++    if (p === 'settings' || p === 'shortcuts') setUi({ panel: null, panelArg: undefined });
++  }, [activeId]);
+ 
+   const rects = useMemo<Record<ID, Rect>>(() => {
+     if (!active) return {};
+@@ -51,6 +62,11 @@ export function Stage() {
+         {active?.kind === 'note' && <NoteEditor key={active.id} note={active} />}
+         {!active && <EmptyState />}
+         <FindBar />
++        {settingsPage && (
++          <PanelGuard key={settingsPage}>
++            <SettingsPanel initial={settingsPage} />
++          </PanelGuard>
++        )}
+       </DropZone>
+       <Peek />
+     </main>
+diff --git a/src/renderer/styles/app.css b/src/renderer/styles/app.css
+index 443c4eb..05b9f87 100644
+--- a/src/renderer/styles/app.css
++++ b/src/renderer/styles/app.css
+@@ -2727,37 +2727,59 @@ body.resizing-v * {
+    Two panes: a quiet nav column (search + sections) and a scrolling page of cards.
+    Each card is a list of rows: what it is on the left, its control on the right. */
+ 
+-.sheet[data-variant='split'] {
+-  position: relative;
+-  width: min(960px, 100%);
+-  height: min(720px, calc(100vh - 48px));
+-  max-height: none;
++/* Settings is a page that fills the page area (the sidebar stays beside it). */
++.kite-page {
++  position: absolute;
++  inset: 0;
++  z-index: 8;
+   overflow: hidden;
++  background: var(--card);
++  color: var(--ink);
++  container-type: inline-size;
++  animation: page-in calc(var(--dur, 220ms) * 1.1) var(--ease-out);
++}
++
++@keyframes page-in {
++  from {
++    opacity: 0;
++    transform: scale(0.99);
++  }
+ }
+ 
+-.sheet-close-float {
++.page-close {
+   position: absolute;
+-  top: 16px;
+-  right: 16px;
+-  z-index: 4;
++  top: 18px;
++  right: 18px;
++  z-index: 5;
++}
++
++/* While Settings is open, the sidebar's selected tab isn't what you're looking at. */
++.app[data-page] .row[data-active]:not(:hover) {
++  background: transparent;
++  box-shadow: none;
++}
++
++.app[data-page] .load-bar,
++.app[data-page] .find-bar {
++  display: none;
+ }
+ 
+ .settings {
+   display: grid;
+-  grid-template-columns: 236px minmax(0, 1fr);
++  grid-template-columns: 248px minmax(0, 1fr);
+   height: 100%;
+   min-height: 0;
+-  --set-card: color-mix(in srgb, var(--card) 78%, transparent);
++  --set-card: color-mix(in srgb, var(--ink) 2.5%, var(--card));
++  --page-col: 760px;
+ }
+ 
+ .settings-nav {
+   display: flex;
+   flex-direction: column;
+   min-height: 0;
+-  padding: 20px 12px 12px;
++  padding: 26px 14px 14px;
+   border-right: 1px solid var(--line);
+-  background: color-mix(in srgb, var(--ink) 3%, transparent);
+-  border-radius: 20px 0 0 20px;
++  background: color-mix(in srgb, var(--ink) 3%, var(--card));
+ }
+ 
+ .settings-brand {
+@@ -2918,8 +2940,8 @@ body.resizing-v * {
+   display: flex;
+   align-items: center;
+   gap: 14px;
+-  padding: 22px 64px 16px 32px;
+-  background: color-mix(in srgb, var(--overlay) 86%, transparent);
++  padding: 26px max(64px, calc((100% - var(--page-col)) / 2)) 18px max(36px, calc((100% - var(--page-col)) / 2));
++  background: color-mix(in srgb, var(--card) 88%, transparent);
+   backdrop-filter: blur(14px) saturate(1.3);
+   box-shadow: 0 1px 0 var(--line);
+ }
+@@ -2943,7 +2965,7 @@ body.resizing-v * {
+ .settings-head-title {
+   margin: 0;
+   font-family: 'Bricolage Grotesque', var(--font);
+-  font-size: calc(19px * var(--scale));
++  font-size: calc(22px * var(--scale));
+   font-weight: 700;
+   letter-spacing: -0.02em;
+   line-height: 1.15;
+@@ -2958,9 +2980,12 @@ body.resizing-v * {
+ .settings-body {
+   display: flex;
+   flex-direction: column;
+-  gap: 22px;
++  gap: 24px;
+   min-width: 0;
+-  padding: 20px 32px 40px;
++  width: 100%;
++  max-width: calc(var(--page-col) + 72px);
++  margin: 0 auto;
++  padding: 24px 36px 56px;
+ }
+ 
+ .settings-intro {
+@@ -3284,10 +3309,11 @@ body.resizing-v * {
+ }
+ 
+ .settings-body .look-bar {
+-  top: 88px;
++  top: 96px;
+ }
+ 
+-@media (max-width: 860px) {
++/* A narrow page area (small window, wide sidebar): the section list becomes icons. */
++@container (max-width: 720px) {
+   .settings {
+     grid-template-columns: 64px minmax(0, 1fr);
+   }
+@@ -3298,19 +3324,17 @@ body.resizing-v * {
+     display: none;
+   }
+   .settings-nav {
+-    padding: 16px 8px;
++    padding: 18px 8px;
+   }
+   .settings-tab {
+     justify-content: center;
+     padding: 0;
+   }
+-  .settings-head,
+-  .settings-body {
+-    padding-left: 20px;
+-    padding-right: 20px;
+-  }
+   .settings-head {
+-    padding-right: 56px;
++    padding: 20px 60px 16px 20px;
++  }
++  .settings-body {
++    padding: 20px 20px 40px;
+   }
+ }
+ 
+diff --git a/tests/e2e/14-settings.spec.ts b/tests/e2e/14-settings.spec.ts
+index 4714a0b..aa51234 100644
+--- a/tests/e2e/14-settings.spec.ts
++++ b/tests/e2e/14-settings.spec.ts
+@@ -216,3 +216,26 @@ test.describe('sidebar: no empty placeholders', () => {
+     await expect(page.getByText('Drop here to pin')).toBeHidden();
+   });
+ });
++
++test.describe('settings is a page, not a dialog', () => {
++  test('it fills the page area, the sidebar stays usable, and picking a tab goes back to it', async ({ page }) => {
++    await openApp(page);
++    await newTab(page, 'a.com');
++    await newTab(page, 'b.com');
++    await page.keyboard.press(`${MOD}+Comma`);
++    const card = (await page.getByTestId('page-card').boundingBox())!;
++    const settings = (await page.getByTestId('settings').boundingBox())!;
++    expect([settings.x, settings.y, settings.width, settings.height]).toEqual([card.x, card.y, card.width, card.height]);
++    await expect(page.getByRole('dialog')).toHaveCount(0);
++    // The tab you were on: clicking it leaves Settings.
++    await todayRows(page).first().click();
++    await expect(page.getByTestId('settings')).toHaveCount(0);
++    // Another tab works too, and so does a new one.
++    await page.keyboard.press(`${MOD}+Comma`);
++    await todayRows(page).nth(1).click();
++    await expect(page.getByTestId('settings')).toHaveCount(0);
++    await page.keyboard.press(`${MOD}+Comma`);
++    await newTab(page, 'c.com');
++    await expect(page.getByTestId('settings')).toHaveCount(0);
++  });
++});

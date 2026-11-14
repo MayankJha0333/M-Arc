@@ -38,6 +38,7 @@ button {
 
 kbd {
   font-family: var(--font);
+  font-variant-numeric: tabular-nums;
   font-size: calc(11px * var(--scale));
   font-weight: 500;
   color: var(--ink-3);
@@ -59,11 +60,40 @@ kbd {
   font-size: calc(13.5px * var(--scale));
   color: var(--ink);
   background: var(--backdrop, linear-gradient(165deg, var(--chrome-a) 0%, var(--chrome-mid) 55%, var(--chrome-b) 100%));
-  transition: background calc(0.5s * var(--speed, 1)) ease;
+  transition: background calc(0.45s * var(--speed, 1)) var(--ease-move);
 }
 
 .app[data-side='right'] {
   flex-direction: row-reverse;
+}
+
+/* ---- design tokens ---------------------------------------------------------
+   Shape, depth and motion shared by every part of the window.
+   Motion follows the HyperFrames motion rules, adapted to an interface:
+   arrivals land on a long-tailed ease-out, exits are ~45% shorter and ease in,
+   moves that start and stop on screen ease both ways. Only opacity, transform
+   and filter animate; nothing idles, floats or pulses. */
+.app {
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.32, 0, 0.67, 0);
+  --ease-move: cubic-bezier(0.65, 0, 0.35, 1);
+  --t-fast: calc(120ms * var(--speed, 1));
+  --t-exit: calc(var(--dur, 220ms) * 0.55);
+  --elev-1: 0 1px 2px rgba(40, 30, 20, 0.05);
+  --elev-2: 0 1px 2px rgba(40, 30, 20, 0.06), 0 8px 24px rgba(40, 30, 20, 0.08);
+  --elev-3: 0 0 0 1px var(--line), 0 12px 32px rgba(20, 16, 12, 0.14), 0 40px 100px rgba(20, 16, 12, 0.18);
+  text-rendering: optimizeLegibility;
+}
+
+.app[data-theme='dark'] {
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --elev-2: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.3);
+  --elev-3: 0 0 0 1px var(--line), 0 12px 32px rgba(0, 0, 0, 0.4), 0 40px 100px rgba(0, 0, 0, 0.45);
 }
 
 .grain {
@@ -140,8 +170,10 @@ kbd {
   top: 0;
   bottom: 0;
   left: 0;
-  width: 10px;
+  width: 12px;
   z-index: 25;
+  /* Must receive the pointer even where the strip around the page drags the window. */
+  -webkit-app-region: no-drag;
 }
 
 .app[data-side='right'] .edge-hotzone {
@@ -158,7 +190,7 @@ kbd {
 .sb-top {
   display: flex;
   align-items: center;
-  height: 46px;
+  height: 44px;
   flex: none;
   padding-top: 2px;
 }
@@ -213,10 +245,10 @@ kbd {
   align-items: center;
   gap: 8px;
   height: 34px;
-  margin: 2px 2px 10px;
+  margin: 0 2px 8px;
   padding: 0 12px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--r-md, 10px);
   background: var(--hover);
   color: var(--ink-2);
   text-align: left;
@@ -270,9 +302,29 @@ kbd {
 /* ---- favorites ---- */
 
 .favorites-zone {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   border-radius: 12px;
   transition: background calc(0.15s * var(--speed, 1)), box-shadow calc(0.15s * var(--speed, 1));
+}
+
+/* No Favorites yet: no empty box. While you drag a tab, a drop slot appears over the
+   Space name for the moment of the drag, so nothing in the list moves. */
+.favorites-zone[data-empty] {
+  position: relative;
+  z-index: 4;
+  height: 6px;
+  margin: 0 0 0;
+}
+
+.favorites-zone[data-empty][data-over] {
+  background: transparent;
+  box-shadow: none;
+}
+
+.favorites-zone[data-empty][data-over] .favorites-empty {
+  border-color: var(--accent);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 14%, var(--card));
 }
 
 .favorites-zone[data-over] {
@@ -328,13 +380,30 @@ kbd {
 }
 
 .favorites-empty {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
   display: grid;
   place-items: center;
-  height: 44px;
+  height: 36px;
   border: 1.5px dashed var(--line);
   border-radius: 11px;
-  color: var(--ink-3);
+  background: var(--card);
+  color: var(--ink-2);
   font-size: calc(11.5px * var(--scale));
+  font-weight: 600;
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.97);
+  transition: opacity var(--t-exit) var(--ease-in), transform var(--t-exit) var(--ease-in), visibility 0s var(--t-exit), background var(--t-fast), border-color var(--t-fast);
+}
+
+body.dragging .favorites-empty {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: opacity calc(var(--dur, 220ms) * 1) var(--ease-out), transform calc(var(--dur, 220ms) * 1.2) var(--ease-out), visibility 0s, background var(--t-fast), border-color var(--t-fast);
 }
 
 /* ---- space header ---- */
@@ -343,10 +412,10 @@ kbd {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 34px;
+  height: 32px;
   padding: 0 8px;
   margin-bottom: 2px;
-  border-radius: 8px;
+  border-radius: var(--r-sm, 8px);
 }
 
 .space-header:hover {
@@ -545,8 +614,42 @@ kbd {
 }
 
 .list-end {
-  min-height: 10px;
+  position: relative;
+  min-height: 6px;
   border-radius: 8px;
+}
+
+/* "Drop here to pin" shows only mid-drag, laid over the divider below, so the list never shifts. */
+.drop-hint {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 10px;
+  border: 1.5px dashed var(--line);
+  border-radius: 9px;
+  background: var(--card);
+  color: var(--ink-2);
+  font-weight: 600;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--t-exit) var(--ease-in), visibility 0s var(--t-exit);
+}
+
+body.dragging .drop-hint {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity calc(var(--dur, 220ms) * 1) var(--ease-out), visibility 0s;
+}
+
+.list-end[data-over] .drop-hint {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--card));
+  color: var(--ink);
 }
 
 .list-end.grow {
@@ -569,8 +672,8 @@ kbd {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 26px;
-  margin: 6px 4px;
+  height: 24px;
+  margin: 2px 6px 4px;
 }
 
 .sb-divider-line {
@@ -715,6 +818,8 @@ kbd {
   background: var(--card);
   box-shadow: var(--shadow);
   isolation: isolate;
+  /* A theme change floods the card's colour, easing both ways. */
+  transition: background calc(0.45s * var(--speed, 1)) var(--ease-move), box-shadow calc(0.3s * var(--speed, 1)) var(--ease-move), border-radius calc(0.3s * var(--speed, 1)) var(--ease-move);
 }
 
 .card[data-over] {
@@ -775,17 +880,28 @@ kbd {
 }
 
 .empty-mark {
-  animation: float 6s ease-in-out infinite;
+  transform: rotate(-4deg);
+  animation: kite-land calc(var(--dur, 220ms) * 3) var(--ease-out) backwards;
 }
 
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0) rotate(-4deg);
+/* The kite drifts in and settles once; after that it is still. */
+@keyframes kite-land {
+  from {
+    opacity: 0;
+    transform: translate(-14px, 10px) rotate(-14deg);
   }
-  50% {
-    transform: translateY(-8px) rotate(3deg);
-  }
+}
+
+.empty-title {
+  animation: blur-in calc(var(--dur, 220ms) * 1.1) var(--ease-out) calc(var(--dur, 220ms) * 0.35) backwards;
+}
+
+.empty-search {
+  animation: rise-in calc(var(--dur, 220ms) * 1.4) var(--ease-out) calc(var(--dur, 220ms) * 0.6) backwards;
+}
+
+.empty-hints {
+  animation: fade-in calc(var(--dur, 220ms) * 1.6) var(--ease-out) calc(var(--dur, 220ms) * 0.9) backwards;
 }
 
 .empty-title {
@@ -823,7 +939,7 @@ kbd {
   display: flex;
   gap: 18px;
   margin-top: 8px;
-  color: var(--ink-3);
+  color: var(--ink-2);
   font-size: calc(12px * var(--scale));
 }
 
@@ -1218,12 +1334,15 @@ body.dragging .surface {
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  height: 34px;
+  height: 32px;
   padding: 0 14px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   background: var(--hover);
+  box-shadow: inset 0 0 0 1px var(--line);
+  white-space: nowrap;
   color: var(--ink);
   font-weight: 600;
   font-size: calc(13px * var(--scale));
@@ -1241,6 +1360,7 @@ body.dragging .surface {
 .btn.primary {
   background: var(--accent);
   color: var(--accent-ink);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .btn.primary:hover {
@@ -1250,6 +1370,7 @@ body.dragging .surface {
 .btn.danger {
   color: #d64545;
   background: transparent;
+  box-shadow: inset 0 0 0 1px rgba(214, 69, 69, 0.3);
 }
 
 .btn.danger:hover {
@@ -1258,8 +1379,14 @@ body.dragging .surface {
 
 .btn.small {
   height: 28px;
-  padding: 0 10px;
+  padding: 0 11px;
+  border-radius: var(--r-sm);
   font-size: calc(12px * var(--scale));
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  pointer-events: none;
 }
 
 .field {
@@ -1353,10 +1480,18 @@ select.input {
   font-size: calc(12.5px * var(--scale));
 }
 
+.segmented button {
+  transition: background var(--t-fast), color var(--t-fast), box-shadow var(--t-fast);
+}
+
+.segmented button:hover:not([data-on]) {
+  color: var(--ink);
+}
+
 .segmented button[data-on] {
   background: var(--card);
   color: var(--ink);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 0 0 0.5px var(--line), 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .toggle {
@@ -2588,37 +2723,176 @@ body.resizing-v * {
   flex-direction: column;
 }
 
-/* ---- settings ---- */
+/* ---- settings ------------------------------------------------------------------
+   Two panes: a quiet nav column (search + sections) and a scrolling page of cards.
+   Each card is a list of rows: what it is on the left, its control on the right. */
+
+/* Settings is a page that fills the page area (the sidebar stays beside it). */
+.kite-page {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  overflow: hidden;
+  background: var(--card);
+  color: var(--ink);
+  container-type: inline-size;
+  animation: page-in calc(var(--dur, 220ms) * 1.1) var(--ease-out);
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: scale(0.99);
+  }
+}
+
+.page-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 5;
+}
+
+/* While Settings is open, the sidebar's selected tab isn't what you're looking at. */
+.app[data-page] .row[data-active]:not(:hover) {
+  background: transparent;
+  box-shadow: none;
+}
+
+.app[data-page] .load-bar,
+.app[data-page] .find-bar {
+  display: none;
+}
 
 .settings {
   display: grid;
-  grid-template-columns: 170px 1fr;
-  gap: 20px;
-  min-height: 460px;
+  grid-template-columns: 248px minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  --set-card: color-mix(in srgb, var(--ink) 2.5%, var(--card));
+  --page-col: 760px;
 }
 
 .settings-nav {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  padding: 26px 14px 14px;
+  border-right: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ink) 3%, var(--card));
+}
+
+.settings-brand {
+  padding: 0 8px 14px;
+  font-family: 'Bricolage Grotesque', var(--font);
+  font-size: calc(21px * var(--scale));
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.settings-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  margin: 0 2px 12px;
+  padding: 0 6px 0 10px;
+  border-radius: var(--r-md);
+  background: var(--card);
+  color: var(--ink-3);
+  box-shadow: inset 0 0 0 1px var(--line);
+  cursor: text;
+  transition: box-shadow var(--t-fast) var(--ease-out);
+}
+
+.settings-search:focus-within {
+  box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--accent-soft);
+}
+
+.settings-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: calc(12.5px * var(--scale));
+  outline: none;
+  user-select: text;
+}
+
+.settings-search input::placeholder {
+  color: var(--ink-3);
+}
+
+.settings-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.app .settings-search input:focus-visible {
+  outline: none;
+}
+
+.settings-search-clear {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--hover);
+  color: var(--ink-2);
+}
+
+.settings-tabs {
+  display: flex;
+  flex-direction: column;
   gap: 2px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
 }
 
 .settings-tab {
   display: flex;
   align-items: center;
-  gap: 9px;
-  height: 34px;
-  padding: 0 10px;
+  gap: 10px;
+  height: 36px;
+  padding: 0 8px;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--r-md);
   background: transparent;
   color: var(--ink-2);
-  font-weight: 600;
+  font-weight: 550;
   text-align: left;
+  transition: background var(--t-fast), color var(--t-fast), box-shadow var(--t-fast);
+}
+
+.settings-tab-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--hover);
+  color: var(--ink-2);
+  transition: background var(--t-fast), color var(--t-fast);
+}
+
+.settings-tab-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-tab:hover {
   background: var(--hover);
+  color: var(--ink);
 }
 
 .settings-tab[data-on] {
@@ -2627,42 +2901,281 @@ body.resizing-v * {
   box-shadow: var(--active-shadow);
 }
 
-.settings-body {
+.settings-tab[data-on] .settings-tab-icon {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.settings-nomatch {
+  margin: 4px 8px;
+  color: var(--ink-2);
+  font-size: calc(12px * var(--scale));
+  line-height: 1.45;
+}
+
+.settings-nav-foot {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-width: 0;
-}
-
-.settings-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px 24px;
-}
-
-.settings-toggles {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.settings-toggles .field-inline {
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 12px 8px 2px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-3);
+  font-size: calc(11.5px * var(--scale));
   font-weight: 500;
 }
 
-.settings-card {
+.settings-main {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-top: 96px;
+}
+
+.settings-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 26px max(64px, calc((100% - var(--page-col)) / 2)) 18px max(36px, calc((100% - var(--page-col)) / 2));
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow: 0 1px 0 var(--line);
+}
+
+.settings-head-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.settings-head-icon svg {
+  width: 19px;
+  height: 19px;
+}
+
+.settings-head-title {
+  margin: 0;
+  font-family: 'Bricolage Grotesque', var(--font);
+  font-size: calc(22px * var(--scale));
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.settings-head-desc {
+  margin: 2px 0 0;
+  color: var(--ink-2);
+  font-size: calc(12.5px * var(--scale));
+}
+
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+  width: 100%;
+  max-width: calc(var(--page-col) + 72px);
+  margin: 0 auto;
+  padding: 24px 36px 56px;
+}
+
+.settings-intro {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: calc(12.5px * var(--scale));
+  line-height: 1.55;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: -8px;
+}
+
+/* A titled card of rows. */
+.set-group-head {
+  padding: 0 4px 8px;
+}
+
+.set-group-title,
+.look-h {
+  margin: 0;
+  font-size: calc(13px * var(--scale));
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+}
+
+.set-group-desc {
+  margin: 3px 0 0;
+  max-width: 62ch;
+  color: var(--ink-2);
+  font-size: calc(12px * var(--scale));
+  line-height: 1.45;
+}
+
+.set-card {
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background: var(--set-card);
+  box-shadow: inset 0 0 0 1px var(--line), var(--elev-1);
+}
+
+.set-card > * + * {
+  border-top: 1px solid var(--line);
+}
+
+.set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 52px;
+  padding: 10px 16px;
+  transition: background var(--t-fast), opacity var(--t-fast);
+}
+
+.set-row[data-stack] {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding-top: 12px;
+  padding-bottom: 14px;
+}
+
+.set-row[data-sub] {
+  padding-left: 34px;
+  min-height: 46px;
+}
+
+.set-switch:hover {
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+}
+
+.set-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.set-row-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: calc(13px * var(--scale));
+  font-weight: 550;
+  line-height: 1.3;
+}
+
+.set-row-value {
+  color: var(--ink-3);
+  font-size: calc(12px * var(--scale));
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.set-row-desc {
+  color: var(--ink-2);
+  font-size: calc(12px * var(--scale));
+  line-height: 1.4;
+}
+
+.set-row-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: none;
+  max-width: 64%;
+}
+
+.set-row[data-stack] .set-row-control {
+  flex-direction: column;
+  align-items: stretch;
+  max-width: none;
+}
+
+.set-row[data-stack] .segmented {
+  align-self: flex-start;
+}
+
+.set-row-control > .range {
+  width: 220px;
+}
+
+.set-row-control > select.input {
+  width: auto;
+  min-width: 190px;
+  height: 32px;
+}
+
+.set-row-control .look-inline-range {
+  width: 320px;
+}
+
+.set-row-control .inline-form {
+  margin: 0;
+}
+
+/* A row that opens another panel. */
+.set-link {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: var(--hover);
-  cursor: pointer;
-  transition: background calc(0.12s * var(--speed, 1));
+  width: 100%;
+  min-height: 58px;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  transition: background var(--t-fast);
 }
 
-.settings-card:hover {
-  background: var(--active);
+.set-link:hover {
+  background: color-mix(in srgb, var(--ink) 3.5%, transparent);
+}
+
+.set-link-chevron {
+  flex: none;
+  color: var(--ink-3);
+  transition: transform calc(var(--dur, 220ms) * 1) var(--ease-out), color var(--t-fast);
+}
+
+.set-link:hover .set-link-chevron {
+  color: var(--ink-2);
+  transform: translateX(2px);
+}
+
+.set-empty {
+  display: block;
+  padding: 14px 16px;
+}
+
+.set-card > .keys,
+.set-card > .perm-list {
+  padding: 6px;
+}
+
+.shields-status-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  text-align: right;
 }
 
 .keys {
@@ -2676,9 +3189,10 @@ body.resizing-v * {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  min-height: 36px;
-  padding: 2px 6px;
-  border-radius: 9px;
+  min-height: 38px;
+  padding: 2px 6px 2px 10px;
+  border-radius: var(--r-sm);
+  transition: background var(--t-fast);
 }
 
 .key-row:hover {
@@ -2693,17 +3207,19 @@ body.resizing-v * {
   min-width: 96px;
   height: 28px;
   padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  border: 0;
+  border-radius: var(--r-sm);
   background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--line), 0 1px 0 var(--line);
   font-family: var(--font);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
+  transition: box-shadow var(--t-fast), color var(--t-fast);
 }
 
 .key-btn[data-recording] {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--accent-soft);
   color: var(--accent);
 }
 
@@ -2716,34 +3232,56 @@ body.resizing-v * {
   font-size: calc(11.5px * var(--scale));
 }
 
+.app[data-theme='dark'] .key-warn {
+  color: #f0a35e;
+}
+
 .danger-zone {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
-  margin-top: 8px;
-  padding: 14px;
-  border: 1px solid rgba(214, 69, 69, 0.25);
-  border-radius: 14px;
+  padding: 16px;
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, #d64545 5%, transparent);
+  box-shadow: inset 0 0 0 1px rgba(214, 69, 69, 0.28);
 }
 
 .about {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 40px 0;
+  gap: 2px;
+  padding: 48px 0 24px;
   text-align: center;
 }
 
+.about-mark {
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  border-radius: 28px;
+  background: var(--set-card);
+  box-shadow: inset 0 0 0 1px var(--line), var(--elev-2);
+}
+
 .about h3 {
-  margin: 10px 0 0;
+  margin: 16px 0 0;
   font-family: 'Bricolage Grotesque', var(--font);
-  font-size: calc(26px * var(--scale));
+  font-size: calc(28px * var(--scale));
+  letter-spacing: -0.02em;
 }
 
 .about p {
   margin: 4px 0;
+}
+
+.about-line {
+  max-width: 48ch;
+  margin-top: 10px !important;
+  color: var(--ink-2);
+  line-height: 1.5;
 }
 
 /* Sheets never grow past the window; their body scrolls instead. */
@@ -2751,10 +3289,53 @@ body.resizing-v * {
   max-height: min(760px, calc(100vh - 48px));
 }
 
-.settings-nav {
-  position: sticky;
-  top: 0;
-  align-self: start;
+/* The look studio inside Settings: same headings, cards for the control groups. */
+.settings-body .look {
+  gap: 22px;
+}
+
+.settings-body .look-sec:not(.look-check) {
+  gap: 10px;
+}
+
+.settings-body .look-sec:has(.look-palettes),
+.settings-body .look-sec:has(.look-accents),
+.settings-body .look-sec:has(.look-share),
+.settings-body .look-sec:has([data-testid='look-shadow']) {
+  padding: 14px 16px 16px;
+  border-radius: var(--r-lg);
+  background: var(--set-card);
+  box-shadow: inset 0 0 0 1px var(--line), var(--elev-1);
+}
+
+.settings-body .look-bar {
+  top: 96px;
+}
+
+/* A narrow page area (small window, wide sidebar): the section list becomes icons. */
+@container (max-width: 720px) {
+  .settings {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+  .settings-brand,
+  .settings-search,
+  .settings-tab-label,
+  .settings-nav-foot {
+    display: none;
+  }
+  .settings-nav {
+    padding: 18px 8px;
+  }
+  .settings-tab {
+    justify-content: center;
+    padding: 0;
+  }
+  .settings-head {
+    padding: 20px 60px 16px 20px;
+  }
+  .settings-body {
+    padding: 20px 20px 40px;
+  }
 }
 
 /* ---- playing / muted indicator ---- */
@@ -3369,12 +3950,6 @@ html.pip-frame-doc #root {
   gap: 12px;
 }
 
-.look-h {
-  margin: 0;
-  font-size: calc(13px * var(--scale));
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
 
 .look-h .muted {
   font-weight: 500;
@@ -3781,13 +4356,13 @@ html.pip-frame-doc #root {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
 }
 
-/* ==== Motion pass ============================================================
-   Everything uses the look's own easing (--ease) and the speed setting (--speed).
-   Only opacity and transform are animated, so nothing here causes layout work. */
+/* ==== Motion ====================================================================
+   Built on the tokens at the top (--ease-out, --ease-in, --ease-move) and the
+   user's feel (--ease) and speed (--dur, --speed). Reduce Motion turns all of it off. */
 
 /* Switching tabs: the new page settles in instead of snapping. */
 .surface-slot[data-visible]:not([data-split]) {
-  animation: surface-in calc(var(--dur, 220ms) * 0.9) var(--ease, ease-out);
+  animation: surface-in calc(var(--dur, 220ms) * 0.9) var(--ease-out);
 }
 
 @keyframes surface-in {
@@ -3797,10 +4372,10 @@ html.pip-frame-doc #root {
   }
 }
 
-/* Sheets, menus and toasts rise from where they belong. */
+/* Sheets arrive slightly low and small, and settle. */
 .sheet {
-  animation: sheet-in calc(var(--dur, 220ms) * 1.1) var(--ease, ease-out);
-  transform-origin: 50% 60%;
+  animation: sheet-in calc(var(--dur, 220ms) * 1.1) var(--ease, var(--ease-out));
+  transform-origin: 50% 40%;
 }
 
 @keyframes sheet-in {
@@ -3810,48 +4385,144 @@ html.pip-frame-doc #root {
   }
 }
 
+.sheet-scrim,
+.cb-scrim {
+  animation: fade-in calc(var(--dur, 220ms) * 0.8) var(--ease-out);
+}
+
+/* The command bar blurs into focus (a "blur-in", not a slide). */
+.cb {
+  animation: cb-in calc(var(--dur, 220ms) * 0.9) var(--ease-out);
+  transform-origin: 50% 0;
+}
+
+@keyframes cb-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.985);
+    filter: blur(6px);
+  }
+}
+
+.menu {
+  animation: menu-in calc(var(--dur, 220ms) * 0.6) var(--ease-out);
+  transform-origin: 0 0;
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
 .toast {
-  animation: toast-in calc(var(--dur, 220ms) * 1.2) var(--ease, ease-out);
+  animation: toast-in calc(var(--dur, 220ms) * 1.3) var(--ease-out);
 }
 
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(12px) scale(0.96);
+    transform: translateY(14px) scale(0.96);
   }
 }
 
-/* Pressing things gives a little. */
+@keyframes blur-in {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* New tabs and opened folders slide into the list; rows stagger 30 ms apart. */
+.sb-section .row,
+.folder-children > .row {
+  animation: row-in calc(var(--dur, 220ms) * 1.2) var(--ease-out) backwards;
+}
+
+.sb-section > :nth-child(2) > .row,
+.sb-section > .row:nth-child(2) { animation-delay: calc(30ms * var(--speed, 1)); }
+.sb-section > .row:nth-child(3) { animation-delay: calc(60ms * var(--speed, 1)); }
+.sb-section > .row:nth-child(4) { animation-delay: calc(90ms * var(--speed, 1)); }
+.sb-section > .row:nth-child(5) { animation-delay: calc(120ms * var(--speed, 1)); }
+.sb-section > .row:nth-child(n + 6) { animation-delay: calc(150ms * var(--speed, 1)); }
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+}
+
+/* The hidden sidebar slides out on a long tail and leaves faster, easing in. */
+.app[data-sidebar-peek] .sidebar {
+  transition: transform calc(var(--dur, 220ms) * 1.25) var(--ease-out), opacity calc(var(--dur, 220ms) * 0.8) var(--ease-out);
+}
+
+.app[data-collapsed]:not([data-sidebar-peek]) .sidebar {
+  transition: transform var(--t-exit) var(--ease-in), opacity var(--t-exit) var(--ease-in);
+}
+
+/* Pressing things gives a little; hover responds at once. */
 .btn,
 .icon-btn,
 .space-dot,
-.settings-card,
+.set-link,
 .look-style,
 .look-palette {
-  transition: transform calc(0.12s * var(--speed, 1)) var(--ease, ease-out), background calc(0.15s * var(--speed, 1)), box-shadow calc(0.15s * var(--speed, 1)), color calc(0.15s * var(--speed, 1)), opacity calc(0.15s * var(--speed, 1));
+  transition: transform var(--t-fast) var(--ease-out), background var(--t-fast), box-shadow calc(0.15s * var(--speed, 1)), color var(--t-fast), opacity var(--t-fast), filter var(--t-fast);
 }
 
 .btn:active,
 .icon-btn:active:not(:disabled),
 .space-dot:active,
-.settings-card:active {
-  transform: scale(0.96);
+.row:active:not([data-dragging]),
+.fav:active {
+  transform: scale(0.97);
+}
+
+.toggle {
+  transition: background calc(var(--dur, 220ms) * 0.8) var(--ease-out), box-shadow var(--t-fast);
 }
 
 .toggle-knob {
-  transition: transform calc(var(--dur, 220ms) * 0.9) var(--ease, ease-out);
+  transition: transform calc(var(--dur, 220ms) * 1.1) var(--ease-out), width var(--t-fast) var(--ease-out);
 }
 
-.settings-body > * {
-  animation: fade-up calc(var(--dur, 220ms) * 1) var(--ease, ease-out) backwards;
+/* Changing Settings section: the page blurs in, its cards follow 40 ms apart. */
+.settings-head {
+  animation: blur-in calc(var(--dur, 220ms) * 0.8) var(--ease-out);
 }
 
-@keyframes fade-up {
+.settings-body > *,
+.settings-body .look > * {
+  animation: section-in calc(var(--dur, 220ms) * 1.2) var(--ease-out) backwards;
+}
+
+.settings-body > :nth-child(2),
+.settings-body .look > :nth-child(2) { animation-delay: calc(40ms * var(--speed, 1)); }
+.settings-body > :nth-child(3),
+.settings-body .look > :nth-child(3) { animation-delay: calc(80ms * var(--speed, 1)); }
+.settings-body > :nth-child(4),
+.settings-body .look > :nth-child(4) { animation-delay: calc(120ms * var(--speed, 1)); }
+.settings-body > :nth-child(n + 5),
+.settings-body .look > :nth-child(n + 5) { animation-delay: calc(160ms * var(--speed, 1)); }
+
+@keyframes section-in {
   from {
     opacity: 0;
     transform: translateY(6px);
+    filter: blur(4px);
   }
 }
+
 
 [data-off] {
   opacity: 0.45;
@@ -4503,4 +5174,79 @@ button.dl-name:not(:disabled):hover {
     --ink-2: var(--ink) !important;
     --ink-3: color-mix(in srgb, var(--ink) 80%, transparent) !important;
   }
+}
+
+
+/* ==== Details ==================================================================== */
+
+/* Icons: a lighter stroke sits better next to 13px text. */
+.app svg.lucide {
+  stroke-width: 1.75;
+}
+
+.app ::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+/* Slim, quiet scrollbars in panels. */
+.app :where(.settings-main, .sheet-body, .cb-list, .menu)::-webkit-scrollbar {
+  width: 10px;
+}
+
+.app :where(.settings-main, .sheet-body, .cb-list, .menu)::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 18%, transparent) padding-box;
+}
+
+.app :where(.settings-main, .sheet-body, .cb-list, .menu)::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--ink) 30%, transparent) padding-box;
+}
+
+.app :where(.settings-main, .sheet-body, .cb-list, .menu)::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Range sliders: an accent fill and a clear thumb. */
+.app .range {
+  height: 18px;
+  cursor: default;
+}
+
+/* Kite follows the system's Reduce Motion setting as well as its own. */
+@media (prefers-reduced-motion: reduce) {
+  .app *,
+  .app *::before,
+  .app *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Settings search: the matching setting is marked for a moment. */
+.settings [data-hit] {
+  animation: hit-flash calc(1400ms * var(--speed, 1)) var(--ease-move);
+}
+
+@keyframes hit-flash {
+  0%,
+  45% {
+    background: var(--accent-soft);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+}
+
+/* Only an unsaved preview keeps its bar pinned while you scroll. */
+.settings-body .look-bar:not([data-dirty]) {
+  position: static;
+}
+
+.chip-list:empty {
+  display: none;
+}
+
+/* The command bar and find bar are focus themselves: no extra box around their text field. */
+.app .cb-input:focus-visible,
+.app .find-bar input:focus-visible {
+  outline: none;
 }

@@ -33,6 +33,35 @@ test.describe('layout: no wasted space around the page', () => {
     expect(await lastButtons(page)).toEqual({ visible: true, x: 16, y: 16 });
   });
 
+  test('a quick flick to the window edge brings the hidden sidebar back', async ({ page }) => {
+    await openDesktop(page);
+    await newTab(page, 'https://a.com');
+    await page.mouse.move(600, 300);
+    await page.keyboard.press(`${MOD}+s`);
+    await expect(page.getByTestId('app')).not.toHaveAttribute('data-sidebar-peek', 'true');
+    await page.mouse.move(0, 300, { steps: 2 });
+    await expect(page.getByTestId('app')).toHaveAttribute('data-sidebar-peek', 'true');
+    expect(await lastButtons(page)).toMatchObject({ visible: true });
+  });
+
+  test('moving out of the window through its side also brings the sidebar (window not at the screen edge)', async ({ page }) => {
+    await openDesktop(page);
+    await newTab(page, 'https://a.com');
+    await page.mouse.move(600, 300);
+    await page.keyboard.press(`${MOD}+s`);
+    await page.mouse.move(40, 300);
+    await page.mouse.move(-40, 300);
+    await expect(page.getByTestId('app')).toHaveAttribute('data-sidebar-peek', 'true');
+    // Back on the page, it tucks away again.
+    await page.mouse.move(700, 300);
+    await expect(page.getByTestId('app')).not.toHaveAttribute('data-sidebar-peek', 'true');
+    // Heading for the menu bar (out through the top-left corner) does not open it.
+    await page.mouse.move(30, 4);
+    await page.mouse.move(-20, -30);
+    await page.waitForTimeout(150);
+    await expect(page.getByTestId('app')).not.toHaveAttribute('data-sidebar-peek', 'true');
+  });
+
   test('with no margin chosen, the page touches every edge', async ({ page }) => {
     await openDesktop(page);
     await newTab(page, 'https://a.com');
@@ -68,7 +97,12 @@ test.describe('layout: no wasted space around the page', () => {
     await expect(page.getByTestId('app')).toHaveAttribute('data-fullscreen', 'true');
     await expect(page.locator('.sb-top')).not.toHaveAttribute('data-lights', 'true');
     expect((await page.getByTestId('btn-toggle-sidebar').boundingBox())!.x).toBeLessThan(before - 60);
-    expect(await lastButtons(page)).toMatchObject({ visible: false });
+    // macOS shows them itself at the top edge in full screen, as in every other app.
+    expect(await lastButtons(page)).toMatchObject({ visible: true });
+    // …even with the sidebar hidden.
+    await page.keyboard.press(`${MOD}+s`);
+    expect(await lastButtons(page)).toMatchObject({ visible: true });
+    await page.keyboard.press(`${MOD}+s`);
     await hooks(page, 't.windowState({ fullscreen: false })');
     await expect(page.locator('.sb-top')).toHaveAttribute('data-lights', 'true');
   });
@@ -91,14 +125,14 @@ test.describe('themes', () => {
     await openDesktop(page);
     await page.keyboard.press(`${MOD}+Comma`);
     await expect(page.getByTestId('look-theme-harbor')).toHaveAttribute('aria-checked', 'true');
-    await expect(page.getByTestId('look-themes').locator('.look-theme')).toHaveCount(10);
+    await expect(page.getByTestId('look-themes').locator('.look-theme')).toHaveCount(12);
   });
 
   test('every theme previews live, can be applied, and keeps text readable in light and dark', async ({ page }) => {
     await openDesktop(page);
     await newTab(page, 'https://a.com');
     await page.keyboard.press(`${MOD}+Comma`);
-    for (const id of ['daybreak', 'harbor', 'aurora', 'lagoon', 'ink', 'graphite', 'nebula', 'ember', 'sakura', 'moss']) {
+    for (const id of ['daybreak', 'harbor', 'aurora', 'lagoon', 'ink', 'graphite', 'nebula', 'ember', 'sakura', 'moss', 'tahoe', 'dusk']) {
       await page.getByTestId(`look-theme-${id}`).click();
       await expect(page.getByTestId(`look-theme-${id}`)).toHaveAttribute('aria-checked', 'true');
       for (const mode of ['light', 'dark']) {
@@ -153,7 +187,7 @@ test.describe('interface sounds', () => {
     expect((await sounds(page)).length).toBe(before); // silence
     await page.keyboard.press(`${MOD}+Comma`);
     // Volume and Play are greyed out while sounds are off.
-    await expect(page.locator('.look-inline-range[data-off]')).toHaveCount(1);
+    await expect(page.locator('.set-row[data-off]').filter({ has: page.getByTestId('set-volume') })).toHaveCount(1);
     await page.getByTestId('set-sounds').click();
     await page.getByTestId('set-sound-test').click();
     expect((await sounds(page)).pop()).toBe('done');
