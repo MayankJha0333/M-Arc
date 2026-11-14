@@ -13,6 +13,7 @@ import { ZapHint } from './components/Boosts';
 import { bridge, desktopChrome, isMac } from './platform';
 import { useEffect } from 'react';
 import { useSystemDark } from './systemDark';
+import { pruneImages, useImageUrl } from './images';
 
 export { useSystemDark };
 
@@ -38,6 +39,19 @@ function Shell() {
   const collapsed = settings.sidebarCollapsed;
   const fullscreen = useKite((st) => st.ui.fullscreen);
   const onSettings = useKite((st) => st.ui.panel === 'settings' || st.ui.panel === 'shortcuts');
+  // A picture behind the whole window replaces the gradient (and its movement).
+  const image = theme.image?.place === 'browser' ? theme.image : undefined;
+  const imageSrc = useImageUrl(image?.id);
+
+  // Once at start: delete stored pictures no Space uses any more.
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      const { s, ui } = useKite.getState();
+      const keep = s.spaces.map((sp) => sp.theme.image?.id).concat(ui.lookDraft?.theme?.image?.id);
+      void pruneImages(keep.filter((x): x is string => !!x));
+    }, 4000);
+    return () => window.clearTimeout(t);
+  }, []);
 
   useEffect(() => bridge.onWindowState((v) => setUi({ fullscreen: v.fullscreen })), []);
   // macOS: the window's close/minimise/zoom buttons live in the sidebar's top corner,
@@ -77,9 +91,19 @@ function Shell() {
       data-mac={isMac || undefined}
       data-space={spaceId}
       data-page={onSettings ? 'settings' : undefined}
+      data-bg-image={imageSrc ? true : undefined}
     >
       {/* The Space's background, moving: a copy of the gradient laid on top only when animated. */}
-      {theme.motion && (
+      {image && imageSrc && (
+        <div
+          className="bg-image"
+          data-blurred={image.blur > 0 || undefined}
+          aria-hidden="true"
+          data-testid="bg-image"
+          style={{ '--img': `url("${imageSrc}")`, '--img-dim': `${Math.round(image.dim * 100)}%`, '--img-blur': `${image.blur}px` } as React.CSSProperties}
+        />
+      )}
+      {theme.motion && !imageSrc && (
         <div className="bg-fx" aria-hidden="true" data-motion={theme.motion.kind}>
           <div className="bg-paint" />
         </div>

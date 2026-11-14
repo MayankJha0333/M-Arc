@@ -15,6 +15,11 @@ import { act, useKite } from '../store';
 import { navigateTab, openUrl, selectItem } from '../commands';
 import { isMac, now } from '../platform';
 import { KiteLogo } from './KiteLogo';
+import { activeSpace } from '@shared/tree';
+import { imageIsDark } from '@shared/background';
+import { resolveDark } from '../theme';
+import { useSystemDark } from '../systemDark';
+import { useImageUrl } from '../images';
 import { SiteIcon } from './SiteIcon';
 
 const MAX_TILES = 8;
@@ -112,8 +117,30 @@ export function StartPage({ tabId }: { tabId?: ID }) {
   const hasTiles = favorites.length > 0 || frequent.length > 0;
   let tileIndex = 0;
 
+  // Your background picture (either place shows it here), previewed live from Settings.
+  const savedImage = useKite((st) => activeSpace(st.s).theme.image);
+  const savedMode = useKite((st) => activeSpace(st.s).theme.mode);
+  const draftTheme = useKite((st) => st.ui.lookDraft?.theme);
+  const image = draftTheme && 'image' in draftTheme ? draftTheme.image : savedImage;
+  const systemDark = useSystemDark();
+  const imageSrc = useImageUrl(image?.id);
+  const dark = resolveDark({ mode: draftTheme?.mode ?? savedMode } as Parameters<typeof resolveDark>[0], systemDark);
+  // Text goes white when the picture (after dimming toward the page colour) is dark.
+  const onDark = !!image && imageIsDark(image, dark ? 0.12 : 0.98);
+
   return (
-    <div className="start" data-testid={tabId ? 'start-page' : 'empty-state'}>
+    <>
+    {image && imageSrc && (
+      <div
+        className="start-bg"
+          data-blurred={image.blur > 0 || undefined}
+        aria-hidden="true"
+        data-testid="start-bg"
+        data-place={image.place}
+        style={{ '--img': `url("${imageSrc}")`, '--img-dim': `${Math.round(image.dim * 100)}%`, '--img-blur': `${image.blur}px` } as React.CSSProperties}
+      />
+    )}
+    <div className="start" data-testid={tabId ? 'start-page' : 'empty-state'} data-image={image && imageSrc ? true : undefined} data-tone={image && imageSrc ? (onDark ? 'dark' : 'light') : undefined}>
       <div className="start-inner">
         <header className="start-hello">
           <h1 className="start-greet">{greeting(today.getHours())}</h1>
@@ -209,6 +236,7 @@ export function StartPage({ tabId }: { tabId?: ID }) {
         <span><kbd>{formatShortcut(sc.settings, isMac)}</kbd> Settings</span>
       </footer>
     </div>
+    </>
   );
 }
 

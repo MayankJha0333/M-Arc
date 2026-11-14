@@ -1,5 +1,5 @@
 import type { AppState, Settings, SpaceTheme, ThemeMode } from './types';
-import { sanitizeGradient, sanitizeMotion } from './background';
+import { sanitizeGradient, sanitizeImage, sanitizeMotion } from './background';
 
 // Kite's design system: visual styles ("looks") and curated colour palettes.
 //
@@ -204,6 +204,7 @@ export function sanitizeTheme(t: Partial<SpaceTheme> | undefined, fallback: Spac
     // Optional extras: kept only when valid; `undefined` in a change removes them.
     ...pick('gradient', sanitizeGradient(t && 'gradient' in t ? t.gradient : fallback.gradient)),
     ...pick('motion', sanitizeMotion(t && 'motion' in t ? t.motion : fallback.motion)),
+    ...pick('image', sanitizeImage(t && 'image' in t ? t.image : fallback.image)),
   };
 }
 
@@ -241,7 +242,8 @@ export interface SharedTheme {
 const PREFIX = 'kite-theme:';
 
 export function encodeTheme(t: SharedTheme): string {
-  const json = JSON.stringify({ v: 1, ...t });
+  // Your picture stays on this computer: a theme code never carries it.
+  const json = JSON.stringify({ v: 1, ...t, theme: { ...t.theme, image: undefined } });
   const b64 = typeof btoa === 'function' ? btoa(unescape(encodeURIComponent(json))) : Buffer.from(json, 'utf8').toString('base64');
   return PREFIX + b64;
 }

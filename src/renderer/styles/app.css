@@ -6137,3 +6137,229 @@ button.dl-name:not(:disabled):hover {
   text-align: center;
   overflow-wrap: anywhere;
 }
+
+/* ==== Background picture ========================================================
+   The picture sits under everything, with the background colour laid over it (Dim)
+   so text stays readable, and optional blur. It fades in once; it never moves after,
+   so it costs nothing while you browse. */
+.bg-image,
+.start-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.bg-image::before,
+.start-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--img) center / cover no-repeat;
+  animation: img-in calc(var(--dur, 220ms) * 3) var(--ease-out) backwards;
+}
+
+/* Blur softens the edges; a slight zoom hides that. */
+:is(.bg-image, .start-bg)[data-blurred]::before {
+  filter: blur(var(--img-blur, 0px));
+  transform: scale(1.08);
+}
+
+.bg-image::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--chrome-mid) var(--img-dim, 45%), transparent);
+}
+
+.start-bg {
+  z-index: 1;
+}
+
+.start-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--card) var(--img-dim, 15%), transparent);
+}
+
+@keyframes img-in {
+  from {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+}
+
+/* The start page lets the picture show through. */
+.start[data-image] {
+  background: transparent;
+}
+
+/* On a dark picture: light text, with a soft shadow so it reads on busy spots. */
+.start[data-tone='dark'] :is(.start-greet, .start-date, .start-sec-h, .start-tile, .start-foot) {
+  color: rgb(255 255 255 / 0.94);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 0 16px rgb(0 0 0 / 0.25);
+}
+
+.start[data-tone='dark'] :is(.start-date, .start-sec-h, .start-foot) {
+  color: rgb(255 255 255 / 0.8);
+}
+
+.start[data-tone='dark'] .start-tile:hover {
+  background: rgb(255 255 255 / 0.12);
+  color: #fff;
+}
+
+.start[data-tone='light'] :is(.start-greet, .start-tile, .start-sec-h) {
+  text-shadow: 0 0 14px color-mix(in srgb, var(--card) 70%, transparent);
+}
+
+/* Tiles and the search box float on the picture: a little glass, a clearer edge. */
+.start[data-image] .start-tile-icon {
+  background: color-mix(in srgb, var(--card) 82%, transparent);
+  backdrop-filter: blur(12px) saturate(1.3);
+}
+
+.start[data-image] .start-foot kbd {
+  text-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-image::before,
+  .start-bg::before {
+    animation: none;
+  }
+}
+
+.app[data-motion='reduced'] :is(.bg-image, .start-bg)::before {
+  animation: none;
+}
+
+/* Settings → Background → Picture */
+.bg-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 132px;
+  padding: 20px;
+  border: 1.5px dashed color-mix(in srgb, var(--ink) 18%, transparent);
+  border-radius: var(--r-lg, 14px);
+  background: color-mix(in srgb, var(--ink) 2.5%, transparent);
+  color: var(--ink-2);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color var(--t-fast), background var(--t-fast), transform var(--t-fast) var(--ease-out);
+}
+
+.bg-drop:hover,
+.bg-drop[data-over] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.bg-drop[data-over] {
+  transform: scale(1.01);
+}
+
+.bg-drop-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.bg-drop-title {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.bg-drop-note {
+  color: var(--ink-3);
+  font-size: calc(12px * var(--scale));
+}
+
+.bg-photo {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 220px;
+  border-radius: var(--r-lg, 14px);
+  background: var(--img) center / cover no-repeat, color-mix(in srgb, var(--ink) 6%, transparent);
+  box-shadow: inset 0 0 0 1px var(--line);
+  animation: rise-in calc(var(--dur, 220ms) * 1.4) var(--ease-out) backwards;
+}
+
+.bg-photo::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: inherit;
+  filter: blur(var(--img-blur-s, 0px));
+}
+
+.bg-photo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--card) var(--img-dim, 0%), transparent);
+}
+
+.bg-photo-actions {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 1;
+  display: flex;
+  gap: 6px;
+}
+
+.bg-photo-actions .btn {
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.bg-photo[data-busy]::after {
+  background: color-mix(in srgb, var(--card) 55%, transparent);
+}
+
+/* Whole browser: the New Tab page shows the same picture, lined up with the window's,
+   so it reads as one picture behind everything (fixed to the window, not the page). */
+.start-bg[data-place='browser']::before {
+  background-attachment: fixed;
+  animation-name: fade-in;
+}
+
+.start-bg[data-place='browser'][data-blurred]::before {
+  transform: none;
+}
+
+.start-bg[data-place='browser']::after {
+  background: color-mix(in srgb, var(--chrome-mid) var(--img-dim, 45%), transparent);
+}
+
+/* Shortcut hints sit on a small frosted strip, readable on any part of the picture. */
+.start[data-image] .start-foot {
+  align-self: center;
+  margin-bottom: 14px;
+  padding: 7px 16px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--card) 72%, transparent);
+  backdrop-filter: blur(14px) saturate(1.2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink-2);
+  text-shadow: none;
+}
+
+.start[data-tone='dark'] .start-foot {
+  color: var(--ink-2);
+  text-shadow: none;
+}

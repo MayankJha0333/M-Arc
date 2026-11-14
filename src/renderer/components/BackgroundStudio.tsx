@@ -3,11 +3,12 @@
 // kept only when you press Apply.
 
 import { useRef, useState } from 'react';
-import { Plus, RotateCcw, Trash2, Globe2 } from 'lucide-react';
+import { Plus, RotateCcw, Trash2, Globe2, ImagePlus, RefreshCw } from 'lucide-react';
 import { PALETTES } from '@shared/look';
-import { addStop, gradientFromColors, GRADIENT_KINDS, MAX_STOPS, MIN_STOPS, MOTIONS, removeStop, type GradientKind, type SpaceGradient } from '@shared/background';
+import { addStop, gradientFromColors, GRADIENT_KINDS, IMAGE_DEFAULTS, IMAGE_PLACES, MAX_STOPS, MIN_STOPS, MOTIONS, removeStop, type GradientKind, type ImagePlace, type SpaceGradient, type SpaceImage } from '@shared/background';
 import type { SpaceTheme } from '@shared/types';
-import { useKite } from '../store';
+import { toast, useKite } from '../store';
+import { addImage, ImageError, useImageUrl } from '../images';
 import { mix } from '../theme';
 import { Group, Row, Segmented, SwitchRow } from './Sheet';
 import { ColorInput, previewLook, useEffectiveLook } from './LookStudio';
@@ -57,7 +58,16 @@ export function BackgroundStudio() {
         <SwitchRow title="Film grain" desc="A fine paper-like texture" checked={theme.grain} onChange={(v) => set({ grain: v })} testId="look-grain" />
       </Group>
 
-      <Group title="Gradient" desc="“Simple” uses your two colours with the style's background. Pick a type to design your own.">
+      <PictureGroup image={theme.image} set={set} />
+
+      <Group
+        title="Gradient"
+        desc={
+          theme.image?.place === 'browser'
+            ? 'Your picture covers the gradient right now. It comes back if you remove the picture or show it on the New Tab page only.'
+            : '“Simple” uses your two colours with the style’s background. Pick a type to design your own.'
+        }
+      >
         <Row title="Type" stack>
           <Segmented
             testId="bg-kind"
@@ -125,13 +135,111 @@ export function BackgroundStudio() {
         {spaceCount > 1 && (
           <SwitchRow title={<><Globe2 size={13} /> Use for every Space</>} desc="Apply this background to all your Spaces" label="Use for every Space" checked={!!draft?.allSpaces} onChange={(v) => previewLook({ allSpaces: v })} testId="look-all-spaces" />
         )}
-        <Row title="Reset background" desc="Back to Simple, with no animation">
-          <button className="btn small" data-testid="bg-reset" disabled={!g && !theme.motion} onClick={() => set({ gradient: undefined, motion: undefined })}>
+        <Row title="Reset background" desc="Back to Simple, with no animation and no picture">
+          <button className="btn small" data-testid="bg-reset" disabled={!g && !theme.motion && !theme.image} onClick={() => set({ gradient: undefined, motion: undefined, image: undefined })}>
             <RotateCcw size={13} /> Reset
           </button>
         </Row>
       </Group>
     </>
+  );
+}
+
+/** Your own picture as the background: add it, pick where it shows, and soften it. */
+function PictureGroup({ image, set }: { image?: SpaceImage; set: (p: Partial<SpaceTheme>) => void }) {
+  const src = useImageUrl(image?.id);
+  const file = useRef<HTMLInputElement>(null);
+  const [over, setOver] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const take = async (f: File | null | undefined) => {
+    if (!f || busy) return;
+    setBusy(true);
+    try {
+      const { id, luma } = await addImage(f);
+      const place: ImagePlace = image?.place ?? 'newtab';
+      set({ image: { id, luma, place, dim: image?.dim ?? IMAGE_DEFAULTS[place].dim, blur: image?.blur ?? 0 } });
+    } catch (e) {
+      toast(e instanceof ImageError ? e.message : 'Kite couldn’t add that picture.');
+    } finally {
+      setBusy(false);
+      if (file.current) file.current.value = '';
+    }
+  };
+
+  const update = (p: Partial<SpaceImage>) => image && set({ image: { ...image, ...p } });
+  const setPlace = (place: ImagePlace) => {
+    if (!image) return;
+    // Untouched dimming follows the place's own starting value (the sidebar needs more).
+    const dim = image.dim === IMAGE_DEFAULTS[image.place].dim ? IMAGE_DEFAULTS[place].dim : image.dim;
+    update({ place, dim });
+  };
+  const choose = () => file.current?.click();
+
+  return (
+    <Group title="Picture" desc="Use your own picture behind the New Tab page, or behind the whole browser.">
+      <input
+        ref={file}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp"
+        hidden
+        data-testid="bg-image-input"
+        onChange={(e) => void take(e.target.files?.[0])}
+      />
+      <div
+        className="bg-picture"
+        onDragOver={(e) => {
+          if (![...e.dataTransfer.types].includes('Files')) return;
+          e.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setOver(false);
+          void take(e.dataTransfer.files?.[0]);
+        }}
+      >
+        {image && src ? (
+          <div
+            className="bg-photo"
+            data-testid="bg-image-preview"
+            data-busy={busy || undefined}
+            style={{ '--img': `url("${src}")`, '--img-dim': `${Math.round(image.dim * 100)}%`, '--img-blur-s': `${Math.round(image.blur / 3)}px` } as React.CSSProperties}
+          >
+            <span className="bg-photo-actions">
+              <button className="btn small" data-testid="bg-image-replace" onClick={choose} disabled={busy}>
+                <RefreshCw size={13} /> {busy ? 'Adding…' : 'Replace'}
+              </button>
+              <button className="btn small" data-testid="bg-image-remove" onClick={() => set({ image: undefined })} disabled={busy}>
+                <Trash2 size={13} /> Remove
+              </button>
+            </span>
+          </div>
+        ) : (
+          <button className="bg-drop" data-over={over || undefined} data-testid="bg-image-upload" onClick={choose} disabled={busy}>
+            <span className="bg-drop-icon">
+              <ImagePlus size={20} />
+            </span>
+            <span className="bg-drop-title">{busy ? 'Adding your picture…' : 'Upload a picture'}</span>
+            <span className="bg-drop-note">Or drop one here. JPG, PNG, WebP or GIF, up to 40 MB.</span>
+          </button>
+        )}
+      </div>
+      {image && (
+        <>
+          <Row title="Show on" desc={IMAGE_PLACES.find((p) => p.id === image.place)?.note}>
+            <Segmented testId="bg-image-place" value={image.place} onChange={(v) => setPlace(v as ImagePlace)} options={IMAGE_PLACES.map((p) => ({ value: p.id, label: p.label }))} />
+          </Row>
+          <Row title="Dim" value={`${Math.round(image.dim * 100)}%`} desc="Lays the background colour over it so text stays easy to read">
+            <input type="range" className="range" aria-label="Dim the picture" min={0} max={0.8} step={0.05} value={image.dim} data-testid="bg-image-dim" onChange={(e) => update({ dim: Number(e.target.value) })} />
+          </Row>
+          <Row title="Blur" value={image.blur ? `${image.blur}px` : 'Off'} desc="Softens a busy picture">
+            <input type="range" className="range" aria-label="Blur the picture" min={0} max={30} step={2} value={image.blur} data-testid="bg-image-blur" onChange={(e) => update({ blur: Number(e.target.value) })} />
+          </Row>
+        </>
+      )}
+    </Group>
   );
 }
 

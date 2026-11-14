@@ -67,3 +67,31 @@ describe('Space background', () => {
     expect(matchTheme(look, { ...plain, motion: { kind: 'drift', speed: 1 } })).toBeNull();
   });
 });
+
+describe('background picture', () => {
+  it('keeps only valid settings, within range, with defaults per place', async () => {
+    const { sanitizeImage } = await import('@shared/background');
+    expect(sanitizeImage({ id: 'bad id!', place: 'newtab' })).toBeUndefined();
+    expect(sanitizeImage(null)).toBeUndefined();
+    expect(sanitizeImage({ id: 'img-abc-123', place: 'browser' })).toEqual({ id: 'img-abc-123', place: 'browser', dim: 0.45, blur: 0, luma: 0.5 });
+    expect(sanitizeImage({ id: 'img-abc-123', place: 'elsewhere', dim: 5, blur: -3, luma: 2 })).toEqual({ id: 'img-abc-123', place: 'newtab', dim: 0.8, blur: 0, luma: 1 });
+  });
+
+  it('text turns light only when the dimmed picture is dark', async () => {
+    const { imageIsDark } = await import('@shared/background');
+    expect(imageIsDark({ luma: 0.1, dim: 0.15 }, 0.98)).toBe(true);
+    // Dimming a dark picture enough toward a white page makes it light.
+    expect(imageIsDark({ luma: 0.1, dim: 0.8 }, 0.98)).toBe(false);
+    expect(imageIsDark({ luma: 0.9, dim: 0.2 }, 0.12)).toBe(false);
+  });
+
+  it('a Space theme keeps its picture; removing it in a change drops it; theme codes leave it out', async () => {
+    const { encodeTheme } = await import('@shared/look');
+    const img = { id: 'img-1234', place: 'browser' as const, dim: 0.5, blur: 6, luma: 0.3 };
+    const t = sanitizeTheme({ ...base, image: img }, base);
+    expect(t.image).toEqual(img);
+    expect(sanitizeTheme({ ...t, image: undefined }, t).image).toBeUndefined();
+    const code = encodeTheme({ look: defaultLook('calm'), theme: t, radius: 10, gap: 8, density: 'comfortable', font: 'figtree' });
+    expect(Buffer.from(code.slice('kite-theme:'.length), 'base64').toString()).not.toContain('img-1234');
+  });
+});

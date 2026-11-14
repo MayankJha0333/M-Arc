@@ -1,4 +1,4 @@
-import type { SpaceGradient, SpaceMotion } from './background';
+import type { SpaceGradient, SpaceImage, SpaceMotion } from './background';
 // Kite's whole saved state. Everything here is plain JSON so it can be
 // written to disk as-is and checked by tests without a browser.
 
@@ -70,6 +70,8 @@ export interface SpaceTheme {
   gradient?: SpaceGradient;
   /** Slow movement of the background (never with Reduce Motion). */
   motion?: SpaceMotion;
+  /** A picture you added, behind the New Tab page or the whole browser. */
+  image?: SpaceImage;
 }
 
 export interface Space {

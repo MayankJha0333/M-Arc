@@ -136,3 +136,54 @@ export function motionSeconds(m: SpaceMotion): number {
   const base: Record<MotionKind, number> = { none: 0, drift: 24, swirl: 30, spin: 60, breathe: 16, hue: 40 };
   return Math.round((base[m.kind] / m.speed) * 10) / 10;
 }
+
+// ---- A picture as the background -------------------------------------------------
+// The picture itself is kept by the renderer (in IndexedDB, under `id`); the Space
+// theme only remembers which one, where it shows, and how it is softened.
+
+export type ImagePlace = 'newtab' | 'browser';
+export interface SpaceImage {
+  /** Key of the stored picture. */
+  id: string;
+  /** Only behind the New Tab page, or behind the whole window (sidebar, frame and New Tab page). */
+  place: ImagePlace;
+  /** 0–0.8: how much the background colour is laid over it, so text stays readable. */
+  dim: number;
+  /** 0–30 px of blur. */
+  blur: number;
+  /** 0–1: how bright the picture is on average (measured when added). */
+  luma: number;
+}
+
+export const IMAGE_PLACES: { id: ImagePlace; label: string; note: string }[] = [
+  { id: 'newtab', label: 'New Tab page', note: 'Only behind the New Tab page' },
+  { id: 'browser', label: 'Whole browser', note: 'Behind the sidebar, the window edges and the New Tab page' },
+];
+
+/** Starting softness per place: the sidebar needs more dimming than an open page. */
+export const IMAGE_DEFAULTS: Record<ImagePlace, { dim: number; blur: number }> = {
+  newtab: { dim: 0.15, blur: 0 },
+  browser: { dim: 0.45, blur: 0 },
+};
+
+export function sanitizeImage(m: unknown): SpaceImage | undefined {
+  if (!m || typeof m !== 'object') return undefined;
+  const o = m as Partial<SpaceImage>;
+  if (typeof o.id !== 'string' || !/^[a-z0-9-]{4,64}$/i.test(o.id)) return undefined;
+  const place: ImagePlace = o.place === 'browser' ? 'browser' : 'newtab';
+  return {
+    id: o.id,
+    place,
+    dim: Math.round(num(o.dim, 0, 0.8, IMAGE_DEFAULTS[place].dim) * 100) / 100,
+    blur: Math.round(num(o.blur, 0, 30, 0)),
+    luma: Math.round(num(o.luma, 0, 1, 0.5) * 1000) / 1000,
+  };
+}
+
+/**
+ * Is text over the picture on a dark background? The picture's brightness, pulled
+ * toward the colour laid over it by the dim amount.
+ */
+export function imageIsDark(img: Pick<SpaceImage, 'luma' | 'dim'>, overlayLuma: number): boolean {
+  return img.luma * (1 - img.dim) + overlayLuma * img.dim < 0.5;
+}
