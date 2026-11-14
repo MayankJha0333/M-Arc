@@ -201,7 +201,13 @@ export function BoostsList() {
         <input className="input" placeholder="Add a Boost for… (e.g. youtube.com)" value={domain} data-testid="boost-new-domain" onChange={(e) => setDomain(e.target.value)} />
         <button className="btn primary" data-testid="boost-new"><Plus size={14} /> Add</button>
       </form>
-      {boosts.length === 0 && <div className="empty-list">No Boosts yet. Open a site and press ⌘⌥B, or add one above.</div>}
+      {boosts.length === 0 && (
+        <div className="empty-list">
+          <span className="empty-state-icon"><Wand2 size={20} /></span>
+          <span className="empty-state-title">No Boosts yet</span>
+          <span className="empty-state-text">Open a site and press ⌘⌥B, or add one above.</span>
+        </div>
+      )}
       <div className="boost-rows">
         {boosts.map((b) => (
           <div key={b.id} className="boost-row" data-testid="boost-row" data-domain={b.domain}>

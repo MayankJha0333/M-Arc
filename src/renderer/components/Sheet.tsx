@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
-import { setUi } from '../store';
+import { setUi, useKite } from '../store';
 import { playSound } from '../sound';
 
 /** A centered panel used for Settings, Archive, Boosts, the Space editor… */
@@ -21,14 +21,38 @@ function useEscToClose(close: () => void) {
 const closePanel = () => setUi({ panel: null, panelArg: undefined });
 
 /**
+ * Close with a short exit animation (faster than the entrance, easing in), then
+ * really close. If another panel took its place meanwhile, that one is left alone.
+ */
+function useLeave(close: () => void): [boolean, () => void] {
+  const [leaving, setLeaving] = useState(false);
+  const started = useRef(false);
+  const leave = useCallback(() => {
+    if (started.current) return;
+    started.current = true;
+    const { s, ui } = useKite.getState();
+    const reduce = s.settings.reduceMotion || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
+    const ms = reduce ? 0 : Math.round(120 / (s.settings.motionSpeed || 1));
+    if (!ms) return close();
+    const panel = ui.panel;
+    setLeaving(true);
+    window.setTimeout(() => {
+      if (useKite.getState().ui.panel === panel) close();
+    }, ms);
+  }, [close]);
+  return [leaving, leave];
+}
+
+/**
  * A full page inside the page area (Settings): the sidebar stays usable beside it,
  * picking any tab goes back to it, and Esc or the close button returns to your page.
  */
 export function Page({ title, children, testId }: { title: string; children: React.ReactNode; testId?: string }) {
-  useEscToClose(closePanel);
+  const [leaving, leave] = useLeave(closePanel);
+  useEscToClose(leave);
   return (
-    <section className="kite-page" role="region" aria-label={title} data-testid={testId}>
-      <button className="icon-btn page-close" aria-label={`Close ${title}`} title={`Close ${title} (esc)`} data-testid="sheet-close" onClick={closePanel}>
+    <section className="kite-page" role="region" aria-label={title} data-testid={testId} data-leaving={leaving || undefined}>
+      <button className="icon-btn page-close" aria-label={`Close ${title}`} title={`Close ${title} (esc)`} data-testid="sheet-close" onClick={leave}>
         <X size={16} />
       </button>
       {children}
@@ -37,10 +61,10 @@ export function Page({ title, children, testId }: { title: string; children: Rea
 }
 
 export function Sheet({ title, subtitle, children, onClose, testId, wide, footer }: { title: React.ReactNode; subtitle?: React.ReactNode; children: React.ReactNode; onClose?: () => void; testId?: string; wide?: boolean; footer?: React.ReactNode }) {
-  const close = onClose ?? closePanel;
+  const [leaving, close] = useLeave(onClose ?? closePanel);
   useEscToClose(close);
   return (
-    <div className="sheet-scrim" onMouseDown={(e) => e.target === e.currentTarget && close()}>
+    <div className="sheet-scrim" data-leaving={leaving || undefined} onMouseDown={(e) => e.target === e.currentTarget && close()}>
       <section className="sheet" data-wide={wide || undefined} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined} data-testid={testId}>
         <header className="sheet-head">
           <div>

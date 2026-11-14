@@ -2,6 +2,7 @@
 
 import type { Settings, SpaceTheme } from '@shared/types';
 import { defaultLook, styleById, type Look, type StyleDef } from '@shared/look';
+import { gradientCss, motionSeconds } from '@shared/background';
 
 type RGB = [number, number, number];
 
@@ -131,14 +132,19 @@ export function themeVars(theme: SpaceTheme, settings: Settings, systemDark: boo
   const t = Math.max(0, Math.min(1, theme.intensity));
   // In dark mode the tint is held back so colours glow instead of shout.
   const k = tone.tint[0] + t * (tone.tint[1] - tone.tint[0]);
-  const a = mix(base, theme.colors[0], k);
-  const b = mix(base, theme.colors[1], k);
+  // Every colour is drawn mixed with the style's base, by the colour strength, so text stays readable.
+  const paint = (c: string) => mix(base, c, k);
+  const g = theme.gradient;
+  const a = paint(g ? g.stops[0].color : theme.colors[0]);
+  const b = paint(g ? g.stops[g.stops.length - 1].color : theme.colors[1]);
+  // The colour text actually sits on: the average of every stop of a custom gradient.
+  const chromeMid = g ? g.stops.map((s) => paint(s.color)).reduce((acc, c, i) => mix(acc, c, 1 / (i + 1))) : mix(a, b, 0.5);
   const ink = tone.ink;
   const high = look.contrast === 'high';
   const accentRaw = look.accent ?? theme.colors[1];
   // The accent must stay readable on the chrome; push it toward the ink colour until it is.
   let accent = accentRaw;
-  for (let i = 0; i < 8 && contrast(accent, mix(a, b, 0.5)) < 3; i++) accent = mix(accent, ink, 0.18);
+  for (let i = 0; i < 8 && contrast(accent, chromeMid) < 3; i++) accent = mix(accent, ink, 0.18);
   const lineA = (dark ? 0.02 + look.border * 0.2 : 0.02 + look.border * 0.2286) + (high ? 0.08 : 0);
   const lineRgb = dark ? '255,255,255' : '40,30,20';
   const ringA = (dark ? 0.06 : 0.06) * (look.border / 0.35);
@@ -152,11 +158,15 @@ export function themeVars(theme: SpaceTheme, settings: Settings, systemDark: boo
   return {
     '--chrome-a': a,
     '--chrome-b': b,
-    '--chrome-mid': mix(a, b, 0.5),
-    '--backdrop': backdropCss(look.backdrop, base, a, b, theme.colors, dark),
+    '--chrome-mid': chromeMid,
+    '--backdrop': g ? gradientCss(g, paint, rgba, base) : backdropCss(look.backdrop, base, a, b, theme.colors, dark),
+    '--bg-motion-dur': theme.motion ? `${motionSeconds(theme.motion)}s` : '0s',
     '--ink': ink,
-    '--ink-2': rgba(ink, high ? 0.86 : dark ? 0.68 : 0.64),
-    '--ink-3': rgba(ink, high ? 0.62 : dark ? 0.42 : 0.4),
+    // Readable greys: --ink-2 and --ink-3 both reach 4.5:1 (WCAG AA for text) on the
+    // card and on the sidebar. --ink-4 is fainter and only for decoration (chevrons, arrows).
+    '--ink-2': rgba(ink, high ? 0.88 : dark ? 0.78 : 0.72),
+    '--ink-3': rgba(ink, high ? 0.76 : dark ? 0.6 : 0.62),
+    '--ink-4': rgba(ink, dark ? 0.42 : 0.4),
     ...rowSurfaces(style, dark, accent, glassy),
     '--line': `rgba(${lineRgb},${lineA.toFixed(3)})`,
     '--card': tone.card,

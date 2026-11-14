@@ -1,4 +1,4 @@
-import { sanitizeLook } from './look';
+import { sanitizeLook, sanitizeTheme } from './look';
 import { sanitizeShields } from './shields';
 // Loading saved state safely: fill in anything missing, drop anything broken.
 
@@ -41,7 +41,8 @@ export function loadState(raw: unknown): AppState {
     ...sp,
     name: sp.name || `Space ${i + 1}`,
     icon: sp.icon || '•',
-    theme: { ...defaultTheme(i), ...(sp.theme ?? {}) },
+    // Saved files are checked like anything else: bad colours or a broken gradient fall back.
+    theme: sanitizeTheme(sp.theme, defaultTheme(i)),
     pinned: Array.isArray(sp.pinned) ? sp.pinned : [],
     today: Array.isArray(sp.today) ? sp.today : [],
     isolated: sp.isolated === true ? true : undefined,

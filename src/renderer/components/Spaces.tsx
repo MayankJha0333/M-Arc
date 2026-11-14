@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { MoreHorizontal, Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import type { ID, Space } from '@shared/types';
 import { ARCHIVE_CHOICES, THEME_PRESETS } from '@shared/defaults';
 import { createSpace, deleteSpace, setSpaceTheme, updateSpace, moveSpace } from '@shared/spaces';
@@ -105,7 +105,7 @@ export function useSpaceSwipe() {
   };
 }
 
-const EMOJIS = ['🪁', '🏠', '💼', '🎨', '📚', '🧪', '🎧', '🌿', '🔥', '⭐', '🚀', '🧭', '🍳', '🎮', '💡', '🛠️', '📈', '✈️', '🧘', '🐙', '🌙', '☕', '🎬', '🗂️'];
+export const EMOJIS = ['🪁', '🏠', '💼', '🎨', '📚', '🧪', '🎧', '🌿', '🔥', '⭐', '🚀', '🧭', '🍳', '🎮', '💡', '🛠️', '📈', '✈️', '🧘', '🐙', '🌙', '☕', '🎬', '🗂️'];
 
 export function SpaceEditor({ id }: { id: ID }) {
   const space = useKite((st) => st.s.spaces.find((x) => x.id === id));
@@ -177,6 +177,14 @@ export function SpaceEditor({ id }: { id: ID }) {
           </span>
         </div>
       </Field>
+
+      <button className="set-link space-more-look" data-testid="space-more-background" onClick={() => setUi({ panel: 'settings', panelArg: 'spaces' })}>
+        <span className="set-row-text">
+          <span className="set-row-title">Gradient & animation</span>
+          <span className="set-row-desc">Design this Space's background in Settings</span>
+        </span>
+        <ChevronRight size={15} className="set-link-chevron" />
+      </button>
 
       <div className="field-row">
         <Field label="Appearance">

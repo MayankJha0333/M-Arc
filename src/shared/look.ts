@@ -1,4 +1,5 @@
 import type { AppState, Settings, SpaceTheme, ThemeMode } from './types';
+import { sanitizeGradient, sanitizeMotion } from './background';
 
 // Kite's design system: visual styles ("looks") and curated colour palettes.
 //
@@ -200,8 +201,13 @@ export function sanitizeTheme(t: Partial<SpaceTheme> | undefined, fallback: Spac
     mode: MODES.includes(t?.mode as ThemeMode) ? (t!.mode as ThemeMode) : fallback.mode,
     intensity: clamp01(t?.intensity, fallback.intensity),
     grain: typeof t?.grain === 'boolean' ? t.grain : fallback.grain,
+    // Optional extras: kept only when valid; `undefined` in a change removes them.
+    ...pick('gradient', sanitizeGradient(t && 'gradient' in t ? t.gradient : fallback.gradient)),
+    ...pick('motion', sanitizeMotion(t && 'motion' in t ? t.motion : fallback.motion)),
   };
 }
+
+const pick = <K extends string, V>(k: K, v: V | undefined) => (v === undefined ? {} : ({ [k]: v } as Record<K, V>));
 
 /** Make a previewed look permanent: settings, plus colours/mode for this Space or all Spaces. */
 export function applyLookDraft(s: AppState, draft: LookDraft, spaceId: string): void {
@@ -307,7 +313,8 @@ export function themeDraft(t: ThemePreset, keep: Pick<Look, 'contrast'>): LookDr
   const d = styleById(t.style).defaults;
   return {
     settings: { look: { ...defaultLook(t.style), ...t.look, contrast: keep.contrast }, radius: d.radius, gap: d.gap, density: d.density, font: d.font },
-    theme: { colors: [...t.colors] as [string, string], intensity: t.intensity, grain: t.grain },
+    // A ready-made theme is a fresh start: no custom gradient or motion.
+    theme: { colors: [...t.colors] as [string, string], intensity: t.intensity, grain: t.grain, gradient: undefined, motion: undefined },
   };
 }
 
@@ -317,6 +324,7 @@ export function matchTheme(look: Look, theme: SpaceTheme): ThemePreset | null {
     THEMES.find((t) => {
       const want = { ...defaultLook(t.style), ...t.look };
       return (
+        !theme.gradient && !theme.motion &&
         t.style === look.style && t.colors[0] === theme.colors[0].toLowerCase() && t.colors[1] === theme.colors[1].toLowerCase() && Math.abs(t.intensity - theme.intensity) < 0.001 &&
         want.backdrop === look.backdrop && want.accent === look.accent && Math.abs(want.border - look.border) < 0.001 && Math.abs(want.shadow - look.shadow) < 0.001 && Math.abs(want.translucency - look.translucency) < 0.001
       );

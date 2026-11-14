@@ -44,6 +44,10 @@ export function hostMatches(host: string, domain: string): boolean {
   return h === d || h.endsWith(`.${d}`);
 }
 
+/** Kite's own new-tab page: a tab at this address shows the start page, not a website. */
+export const NEW_TAB_URL = 'kite://newtab';
+export const isNewTabUrl = (url: string | undefined | null): boolean => url === NEW_TAB_URL;
+
 /** Short display form of a URL for the sidebar/URL bar. */
 export function displayUrl(url: string): string {
   try {

@@ -1,22 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Palette, Layers, Keyboard, Route, Database, Info, RotateCcw, Upload, Download, Wand2, AlertTriangle, PanelLeft, PanelRight, ShieldCheck, Puzzle, RefreshCw, Trash2, Search, ChevronRight, X } from 'lucide-react';
+import { Palette, Layers, Keyboard, Route, Database, Info, RotateCcw, Upload, Download, Wand2, AlertTriangle, PanelLeft, PanelRight, ShieldCheck, Puzzle, RefreshCw, Trash2, Search, ChevronRight, X, Shapes, LayoutPanelLeft, AudioLines, Plus } from 'lucide-react';
 import { siteKey, type Shields } from '@shared/shields';
 import type { ShieldsStatus, SitePermission } from '@shared/ipc';
 import { ARCHIVE_CHOICES, SEARCH_ENGINES, SHORTCUT_LABELS, DEFAULT_SHORTCUTS, createInitialState } from '@shared/defaults';
 import { clearHistory, exportBackup, readBackup, resetAppearance, resetShortcuts, setShortcut, shortcutConflict, updateSettings, LIMITS, type BackupInfo } from '@shared/settings';
 import { formatShortcut, shortcutFromEvent } from '@shared/shortcuts';
-import type { Settings as S } from '@shared/types';
+import type { ID, Settings as S } from '@shared/types';
 import { activeSpace } from '@shared/tree';
 import { act, getS, setUi, toast, useKite } from '../store';
 import { bridge, isMac } from '../platform';
 import { Page, Segmented, Group, Row, SwitchRow } from './Sheet';
 import { KiteLogo } from './KiteLogo';
-import { openSpaceEditor } from './Spaces';
-import { LookStudio, setLayout, useEffectiveLook } from './LookStudio';
-import { sleepOtherTabs } from '../commands';
+import { EMOJIS } from './Spaces';
+import { BackgroundStudio } from './BackgroundStudio';
+import { createSpace, deleteSpace, updateSpace } from '@shared/spaces';
+import { LookBar, LookStudio, setLayout, useDiscardPreviewOnLeave, useEffectiveLook } from './LookStudio';
+import { sleepOtherTabs, switchSpaceCmd, undoable } from '../commands';
+import { now } from '../platform';
 import { playSound } from '../sound';
 
-type Section = 'appearance' | 'tabs' | 'privacy' | 'keys' | 'links' | 'data' | 'about';
+type Section = 'appearance' | 'spaces' | 'layout' | 'motion' | 'tabs' | 'links' | 'privacy' | 'extensions' | 'keys' | 'data' | 'about';
 interface SectionDef {
   id: Section;
   label: string;
@@ -26,15 +29,55 @@ interface SectionDef {
   /** Extra words the search box matches (what lives in the section). */
   words: string;
 }
-const SECTIONS: SectionDef[] = [
-  { id: 'appearance', label: 'Appearance', desc: 'Themes, colours, layout, type and motion', icon: <Palette size={15} />, words: 'theme style colour color dark light mode accent font text size sidebar side width corner radius spacing density gap favorites animation motion speed sound volume css address bar' },
-  { id: 'tabs', label: 'Tabs & Browsing', desc: 'Archiving, memory, search, Peek and videos', icon: <Layers size={15} />, words: 'archive tabs little window memory sleep search engine peek pinned titles video picture floating history' },
-  { id: 'privacy', label: 'Privacy & Security', desc: 'Shields, connection, permissions and site data', icon: <ShieldCheck size={15} />, words: 'shields ads trackers cookie banners https gpc downloads permissions camera microphone location notifications clear data cache' },
-  { id: 'keys', label: 'Keyboard', desc: 'Every shortcut, ready to change', icon: <Keyboard size={15} />, words: 'shortcut keys hotkey keyboard' },
-  { id: 'links', label: 'Links & Boosts', desc: 'Routing, extensions and site restyles', icon: <Route size={15} />, words: 'routing default browser extensions chrome boosts restyle' },
-  { id: 'data', label: 'Your Data', desc: 'Import, back up, restore or start over', icon: <Database size={15} />, words: 'import arc backup restore export reset erase' },
-  { id: 'about', label: 'About Kite', desc: 'Version and credits', icon: <Info size={15} />, words: 'version about credits' },
+
+/**
+ * How Settings is organised, by what people come to do (not by how Kite is built):
+ * - Personalize: how Kite looks and feels. Whole-window look first, then each Space.
+ * - Browsing: how tabs, search and links behave day to day.
+ * - Privacy: what's blocked, shared, remembered and cleared, all in one place.
+ * - Power tools: extensions, Boosts and shortcuts, for when you want more.
+ * - Kite: your data and the app itself; rare and risky things live last.
+ * Each page lists its most-used settings first, and anything destructive last.
+ */
+const GROUPS: { label: string; items: SectionDef[] }[] = [
+  {
+    label: 'Personalize',
+    items: [
+      { id: 'appearance', label: 'Appearance', desc: 'Themes, style, accent and text for the whole window', icon: <Palette size={15} />, words: 'theme style accent surfaces borders shadows glass frosted contrast font text size share code css restyle reset readability' },
+      { id: 'spaces', label: 'Spaces', desc: 'Name, icon, colours, gradient and animation of each Space', icon: <Shapes size={15} />, words: 'space name icon emoji colour color mode dark light gradient stops angle radial conic mesh linear palette animation animate motion drift swirl spin breathe grain strength logins accounts separate isolated archive delete background wallpaper' },
+      { id: 'layout', label: 'Layout', desc: 'Sidebar, spacing, corners and Favorites', icon: <LayoutPanelLeft size={15} />, words: 'sidebar side left right width spacing density compact roomy gap margin corner radius roundness favorites columns address bar url close buttons hover' },
+      { id: 'motion', label: 'Motion & Sound', desc: 'Animations, their speed, and interface sounds', icon: <AudioLines size={15} />, words: 'reduce motion animation feel smooth snappy bouncy speed sound sounds volume audio accessibility' },
+    ],
+  },
+  {
+    label: 'Browsing',
+    items: [
+      { id: 'tabs', label: 'Tabs', desc: 'Archiving, memory, Peek and videos', icon: <Layers size={15} />, words: 'archive tabs little window memory sleep awake tidy titles pinned peek shift click video picture floating pop out' },
+      { id: 'links', label: 'Search & Links', desc: 'Your search engine, and where links from other apps open', icon: <Route size={15} />, words: 'search engine google duckduckgo kagi bing custom routing default browser links other apps air traffic rules' },
+    ],
+  },
+  {
+    label: 'Privacy',
+    items: [{ id: 'privacy', label: 'Privacy & Security', desc: 'Shields, connection, permissions, downloads and your data', icon: <ShieldCheck size={15} />, words: 'shields ads trackers cookie banners https gpc global privacy control downloads permissions camera microphone location notifications clear data cache cookies history' }],
+  },
+  {
+    label: 'Power tools',
+    items: [
+      { id: 'extensions', label: 'Extensions & Boosts', desc: 'Add features to Kite, and restyle the sites you use', icon: <Puzzle size={15} />, words: 'extensions chrome web store boosts restyle hide clutter css' },
+      { id: 'keys', label: 'Keyboard', desc: 'Every shortcut, ready to change', icon: <Keyboard size={15} />, words: 'shortcut keys hotkey keyboard' },
+    ],
+  },
+  {
+    label: 'Kite',
+    items: [
+      { id: 'data', label: 'Backup & Import', desc: 'Import from Arc, back up, restore or start over', icon: <Database size={15} />, words: 'import arc backup restore export reset erase start over data' },
+      { id: 'about', label: 'About Kite', desc: 'Version and credits', icon: <Info size={15} />, words: 'version about credits' },
+    ],
+  },
 ];
+const SECTIONS: SectionDef[] = GROUPS.flatMap((g) => g.items);
+/** Old links into Settings still land somewhere sensible. */
+const ALIASES: Record<string, Section> = { search: 'links', routing: 'links', boosts: 'extensions', shortcuts: 'keys', backup: 'data', colours: 'spaces', background: 'spaces' };
 
 /** Sections whose name, description or contents match what you typed. */
 export function matchSections(query: string): Section[] {
@@ -47,13 +90,17 @@ export function matchSections(query: string): Section[] {
   }).map((x) => x.id);
 }
 
-const set = (patch: Partial<S>) => act((d) => updateSettings(d, patch));
+const toSection = (arg: string | undefined): Section => (SECTIONS.some((x) => x.id === arg) ? (arg as Section) : arg && ALIASES[arg] ? ALIASES[arg] : 'appearance');
 
-export function SettingsPanel({ initial }: { initial?: string }) {
-  const [section, setSection] = useState<Section>((SECTIONS.find((x) => x.id === initial)?.id ?? 'appearance') as Section);
+export function SettingsPanel() {
+  // The open section lives in the app state, so other parts of Kite can link to one.
+  const section = useKite((x) => (x.ui.panel === 'shortcuts' ? 'keys' : toSection(x.ui.panelArg)));
+  const setSection = (id: Section) => setUi({ panel: 'settings', panelArg: id });
   const [query, setQuery] = useState('');
   const shown = useMemo(() => matchSections(query), [query]);
   const body = useRef<HTMLDivElement>(null);
+  // A look preview carries across sections; it's only thrown away when Settings closes.
+  useDiscardPreviewOnLeave();
   // Searching jumps to the first section that matches.
   useEffect(() => {
     if (shown.length && !shown.includes(section)) setSection(shown[0]);
@@ -69,8 +116,8 @@ export function SettingsPanel({ initial }: { initial?: string }) {
     const t = window.setTimeout(() => {
       const root = body.current;
       if (!root) return;
-      const hit = Array.from(root.querySelectorAll<HTMLElement>('.set-row-title, .set-group-title, .look-h, .key-label')).find((el) => el.textContent?.toLowerCase().includes(q));
-      const row = hit?.closest<HTMLElement>('.set-row, .set-group-head, .look-sec, .key-row') ?? hit;
+      const hit = Array.from(root.querySelectorAll<HTMLElement>('.set-row-title, .set-group-title, .look-h, .key-label, .bg-tile-label')).find((el) => el.textContent?.toLowerCase().includes(q));
+      const row = hit?.closest<HTMLElement>('.set-row, .set-group-head, .look-sec, .key-row, .bg-tile') ?? hit;
       if (!row) return;
       root.querySelectorAll('[data-hit]').forEach((el) => el.removeAttribute('data-hit'));
       row.scrollIntoView({ block: 'center', behavior: useKite.getState().s.settings.reduceMotion ? 'auto' : 'smooth' });
@@ -79,6 +126,7 @@ export function SettingsPanel({ initial }: { initial?: string }) {
     return () => window.clearTimeout(t);
   }, [query, section]);
   const def = SECTIONS.find((x) => x.id === section)!;
+  const scope = section === 'spaces' ? 'This Space' : section === 'appearance' || section === 'layout' ? 'All Spaces' : null;
   return (
     <Page title="Settings" testId="settings">
       <div className="settings">
@@ -108,12 +156,21 @@ export function SettingsPanel({ initial }: { initial?: string }) {
             )}
           </label>
           <div className="settings-tabs" role="tablist" aria-orientation="vertical">
-            {SECTIONS.filter((x) => shown.includes(x.id)).map((x) => (
-              <button key={x.id} role="tab" aria-selected={section === x.id} aria-label={x.label} title={x.label} className="settings-tab" data-on={section === x.id || undefined} data-testid={`settings-${x.id}`} onClick={() => setSection(x.id)}>
-                <span className="settings-tab-icon">{x.icon}</span>
-                <span className="settings-tab-label">{x.label}</span>
-              </button>
-            ))}
+            {GROUPS.map((g) => {
+              const items = g.items.filter((x) => shown.includes(x.id));
+              if (!items.length) return null;
+              return (
+                <div className="settings-navgroup" key={g.label} role="presentation">
+                  <div className="settings-navgroup-label" aria-hidden="true">{g.label}</div>
+                  {items.map((x) => (
+                    <button key={x.id} role="tab" aria-selected={section === x.id} aria-label={x.label} title={x.label} className="settings-tab" data-on={section === x.id || undefined} data-testid={`settings-${x.id}`} onClick={() => setSection(x.id)}>
+                      <span className="settings-tab-icon">{x.icon}</span>
+                      <span className="settings-tab-label">{x.label}</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
             {shown.length === 0 && <p className="settings-nomatch" data-testid="settings-nomatch">No settings match “{query.trim()}”.</p>}
           </div>
           <div className="settings-nav-foot">
@@ -124,16 +181,23 @@ export function SettingsPanel({ initial }: { initial?: string }) {
           <header className="settings-head" key={`h-${section}`}>
             <span className="settings-head-icon">{def.icon}</span>
             <div>
-              <h2 className="settings-head-title">{def.label}</h2>
+              <h2 className="settings-head-title">
+                {def.label}
+                {scope && <span className="settings-scope" data-testid="settings-scope">{scope}</span>}
+              </h2>
               <p className="settings-head-desc">{def.desc}</p>
             </div>
           </header>
           <div className="settings-body" key={section} role="tabpanel" aria-label={def.label}>
             {section === 'appearance' && <Appearance />}
+            {section === 'spaces' && <SpacesPage />}
+            {section === 'layout' && <LayoutPage />}
+            {section === 'motion' && <MotionPage />}
             {section === 'tabs' && <TabsSection />}
+            {section === 'links' && <SearchLinks />}
             {section === 'privacy' && <Privacy />}
+            {section === 'extensions' && <Extensions />}
             {section === 'keys' && <Keys />}
-            {section === 'links' && <Links />}
             {section === 'data' && <Data />}
             {section === 'about' && <About />}
           </div>
@@ -142,6 +206,8 @@ export function SettingsPanel({ initial }: { initial?: string }) {
     </Page>
   );
 }
+
+const set = (patch: Partial<S>) => act((d) => updateSettings(d, patch));
 
 function Slider({ k, label, unit = 'px', step = 1, testId }: { k: keyof typeof LIMITS; label: string; unit?: string; step?: number; testId: string }) {
   const { settings } = useEffectiveLook();
@@ -158,7 +224,6 @@ function Slider({ k, label, unit = 'px', step = 1, testId }: { k: keyof typeof L
 
 function Appearance() {
   const st = useEffectiveLook().settings;
-  const space = useKite((x) => activeSpace(x.s));
   const [css, setCss] = useState(st.chromeCss);
   useEffect(() => {
     const t = setTimeout(() => css !== getS().settings.chromeCss && set({ chromeCss: css }), 250);
@@ -166,32 +231,9 @@ function Appearance() {
   }, [css]);
   return (
     <>
+      <LookBar />
       <LookStudio />
-      <Group title="This Space" desc="Each Space keeps its own name, icon, colours and light or dark mode.">
-        <button className="set-link" onClick={() => openSpaceEditor(space.id)} data-testid="settings-space-theme">
-          <span className="import-swatch" style={{ background: `linear-gradient(135deg, ${space.theme.colors[0]}, ${space.theme.colors[1]})` }}>{space.icon}</span>
-          <span className="set-row-text">
-            <span className="set-row-title">Edit “{space.name}”</span>
-            <span className="set-row-desc">Name, icon and colours</span>
-          </span>
-          <ChevronRight size={15} className="set-link-chevron" />
-        </button>
-      </Group>
-      <Group title="Layout" desc="Where things sit and how much room they take.">
-        <Row title="Sidebar side">
-          <Segmented testId="set-side" value={st.sidebarSide} onChange={(v) => set({ sidebarSide: v })} options={[{ value: 'left', label: <><PanelLeft size={13} /> Left</> }, { value: 'right', label: <><PanelRight size={13} /> Right</> }]} />
-        </Row>
-        <Row title="Spacing" desc="How tall tabs and rows are">
-          <Segmented testId="set-density" value={st.density} onChange={(v) => setLayout({ density: v }, set)} options={[{ value: 'compact', label: 'Compact' }, { value: 'comfortable', label: 'Comfortable' }, { value: 'roomy', label: 'Roomy' }]} />
-        </Row>
-        <Slider k="sidebarWidth" label="Sidebar width" testId="set-width" />
-        <Slider k="gap" label="Space around the page" testId="set-gap" />
-        <Slider k="radius" label="Corner roundness" testId="set-radius" />
-        <Slider k="favoritesColumns" label="Favorites per row" unit="" testId="set-favcols" />
-        <SwitchRow title="Address bar in the sidebar" checked={st.showUrlBar} onChange={(v) => set({ showUrlBar: v })} testId="set-urlbar" />
-        <SwitchRow title="Close buttons on hover" desc="Otherwise only the selected tab shows one" checked={st.showTabCloseOnHover} onChange={(v) => set({ showTabCloseOnHover: v })} testId="set-closehover" />
-      </Group>
-      <Group title="Text">
+      <Group title="Text" desc="Kite's own text. Web pages keep their fonts.">
         <Row title="Font" stack>
           <Segmented
             testId="set-font"
@@ -208,8 +250,146 @@ function Appearance() {
         </Row>
         <Slider k="fontScale" label="Text size" step={0.05} testId="set-scale" />
       </Group>
-      <Group title="Motion" desc="How things move. Kite follows your system's Reduce Motion too.">
-        <SwitchRow title="Reduce motion" desc="Turn off animations and transitions" checked={st.reduceMotion} onChange={(v) => set({ reduceMotion: v })} testId="set-motion" />
+      <Group title="Advanced" desc="Your own CSS for Kite's window. It applies on top of everything above.">
+        <Row title="Restyle Kite itself" stack>
+          <textarea className="input" aria-label="Custom CSS for Kite" spellCheck={false} placeholder={'.sidebar { backdrop-filter: blur(20px); }\n.row[data-active] { border-radius: 4px; }'} value={css} data-testid="set-chrome-css" onChange={(e) => setCss(e.target.value)} />
+        </Row>
+        <Row title="Reset appearance" desc="Back to the default theme, layout, type and motion">
+          <button className="btn small" data-testid="set-reset-appearance" onClick={() => { setUi({ lookDraft: null }); act(resetAppearance); setCss(''); toast('Appearance reset'); }}>
+            <RotateCcw size={13} /> Reset
+          </button>
+        </Row>
+      </Group>
+    </>
+  );
+}
+
+/** Everything about one Space in one place: who it is, how it looks, how it behaves. */
+function SpacesPage() {
+  const spaces = useKite((x) => x.s.spaces);
+  const space = useKite((x) => activeSpace(x.s));
+  const tabs = useKite((x) => (id: ID) => {
+    const sp = x.s.spaces.find((y) => y.id === id);
+    return sp ? sp.pinned.length + sp.today.length : 0;
+  });
+  const choose = (id: ID) => {
+    if (id === space.id) return;
+    // A background preview belongs to the Space it was made on.
+    if (useKite.getState().ui.lookDraft) {
+      setUi({ lookDraft: null });
+      toast('Background preview discarded (it was for another Space)');
+    }
+    switchSpaceCmd(id);
+  };
+  return (
+    <>
+      <div className="space-picker" role="tablist" aria-label="Choose a Space to edit" data-testid="space-picker">
+        {spaces.map((sp) => (
+          <button key={sp.id} role="tab" aria-selected={sp.id === space.id} className="space-pick" data-on={sp.id === space.id || undefined} data-testid={`set-space-${sp.id}`} onClick={() => choose(sp.id)}>
+            <span className="space-pick-sw" style={{ background: `linear-gradient(135deg, ${sp.theme.colors[0]}, ${sp.theme.colors[1]})` }}>{sp.icon}</span>
+            <span className="space-pick-text">
+              <span className="space-pick-name">{sp.name}</span>
+              <span className="space-pick-meta">{tabs(sp.id)} tab{tabs(sp.id) === 1 ? '' : 's'}</span>
+            </span>
+          </button>
+        ))}
+        <button className="space-pick add" data-testid="set-space-new" onClick={() => { if (useKite.getState().ui.lookDraft) setUi({ lookDraft: null }); const id = act((d) => createSpace(d, {})); switchSpaceCmd(id); }}>
+          <span className="space-pick-sw"><Plus size={16} /></span>
+          <span className="space-pick-text"><span className="space-pick-name">New Space</span></span>
+        </button>
+      </div>
+
+      <LookBar />
+      <BackgroundStudio />
+
+      <Group title="Name & icon">
+        <Row title="Name">
+          <input key={space.id} className="input" aria-label="Space name" data-testid="set-space-name" defaultValue={space.name} onChange={(e) => act((d) => updateSpace(d, space.id, { name: e.target.value }))} />
+        </Row>
+        <Row title="Icon" desc="Pick one or type any emoji" stack>
+          <div className="emoji-grid">
+            {EMOJIS.map((e) => (
+              <button key={e} className="emoji" aria-label={`Icon ${e}`} data-on={space.icon === e || undefined} onClick={() => act((d) => updateSpace(d, space.id, { icon: e }))}>
+                {e}
+              </button>
+            ))}
+            <input key={`i-${space.id}`} className="input emoji-input" aria-label="Your own icon" maxLength={4} placeholder="✎" data-testid="set-space-icon" onChange={(e) => e.target.value && act((d) => updateSpace(d, space.id, { icon: e.target.value }))} />
+          </div>
+        </Row>
+      </Group>
+
+
+      <Group title="Behaviour">
+        <SwitchRow
+          title="Separate logins"
+          desc="Its own cookies, sign-ins and site data, so you can use a second account on the same sites. Favorites stay shared."
+          checked={!!space.isolated}
+          testId="set-space-isolated"
+          onChange={(isolated) => {
+            act((d) => updateSpace(d, space.id, { isolated }));
+            toast(isolated ? `“${space.name}” now has its own logins and cookies. Its tabs reloaded.` : `“${space.name}” shares logins with your other Spaces again. Its tabs reloaded.`);
+          }}
+        />
+        <Row title="Archive unused tabs after" desc="Overrides the setting in Tabs, for this Space only">
+          <select
+            className="input"
+            aria-label="Archive unused tabs in this Space after"
+            data-testid="set-space-archive"
+            value={space.archiveAfterMs === undefined ? 'global' : String(space.archiveAfterMs)}
+            onChange={(e) => act((d) => updateSpace(d, space.id, { archiveAfterMs: e.target.value === 'global' ? undefined : e.target.value === 'null' ? null : Number(e.target.value) }))}
+          >
+            <option value="global">Same as Tabs setting</option>
+            {ARCHIVE_CHOICES.map((c) => <option key={c.label} value={String(c.ms)}>{c.label}</option>)}
+          </select>
+        </Row>
+      </Group>
+
+      {spaces.length > 1 && (
+        <div className="danger-zone">
+          <b>Delete “{space.name}”</b>
+          <span className="muted">Its pinned tabs and folders move to the Archive. You can undo right after.</span>
+          <button className="btn small danger" data-testid="set-space-delete" onClick={() => { const name = space.name; const id = space.id; undoable(`Deleted Space “${name}”`, (d) => void deleteSpace(d, id, now())); }}>
+            <Trash2 size={13} /> Delete Space
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
+function LayoutPage() {
+  const st = useEffectiveLook().settings;
+  return (
+    <>
+      <LookBar />
+      <Group title="Sidebar">
+        <Row title="Side">
+          <Segmented testId="set-side" value={st.sidebarSide} onChange={(v) => set({ sidebarSide: v })} options={[{ value: 'left', label: <><PanelLeft size={13} /> Left</> }, { value: 'right', label: <><PanelRight size={13} /> Right</> }]} />
+        </Row>
+        <Slider k="sidebarWidth" label="Width" testId="set-width" />
+        <SwitchRow title="Address bar in the sidebar" checked={st.showUrlBar} onChange={(v) => set({ showUrlBar: v })} testId="set-urlbar" />
+        <SwitchRow title="Close buttons on hover" desc="Otherwise only the selected tab shows one" checked={st.showTabCloseOnHover} onChange={(v) => set({ showTabCloseOnHover: v })} testId="set-closehover" />
+      </Group>
+      <Group title="Spacing & shape" desc="Each style sets these; change them to taste.">
+        <Row title="Row height" desc="How tall tabs and rows are">
+          <Segmented testId="set-density" value={st.density} onChange={(v) => setLayout({ density: v }, set)} options={[{ value: 'compact', label: 'Compact' }, { value: 'comfortable', label: 'Comfortable' }, { value: 'roomy', label: 'Roomy' }]} />
+        </Row>
+        <Slider k="gap" label="Space around the page" testId="set-gap" />
+        <Slider k="radius" label="Corner roundness" testId="set-radius" />
+      </Group>
+      <Group title="Favorites">
+        <Slider k="favoritesColumns" label="Favorites per row" unit="" testId="set-favcols" />
+      </Group>
+    </>
+  );
+}
+
+function MotionPage() {
+  const st = useKite((x) => x.s.settings);
+  return (
+    <>
+      <Group title="Motion" desc="How things move. Kite also follows your system's Reduce Motion setting.">
+        <SwitchRow title="Reduce motion" desc="Turn off animations and transitions, including moving backgrounds" checked={st.reduceMotion} onChange={(v) => set({ reduceMotion: v })} testId="set-motion" />
         <Row title="Feel" off={st.reduceMotion}>
           <Segmented testId="set-feel" value={st.motionFeel} onChange={(v) => set({ motionFeel: v })} options={[{ value: 'style', label: 'From style' }, { value: 'smooth', label: 'Smooth' }, { value: 'snappy', label: 'Snappy' }, { value: 'bouncy', label: 'Bouncy' }]} />
         </Row>
@@ -226,16 +406,6 @@ function Appearance() {
           </span>
         </Row>
       </Group>
-      <Group title="Advanced" desc="Your own CSS for Kite’s window. It applies on top of everything above.">
-        <Row title="Restyle Kite itself" stack>
-          <textarea className="input" aria-label="Custom CSS for Kite" spellCheck={false} placeholder={'.sidebar { backdrop-filter: blur(20px); }\n.row[data-active] { border-radius: 4px; }'} value={css} data-testid="set-chrome-css" onChange={(e) => setCss(e.target.value)} />
-        </Row>
-        <Row title="Reset appearance" desc="Back to the default theme, layout, type and motion">
-          <button className="btn small" data-testid="set-reset-appearance" onClick={() => { setUi({ lookDraft: null }); act(resetAppearance); setCss(''); toast('Appearance reset'); }}>
-            <RotateCcw size={13} /> Reset
-          </button>
-        </Row>
-      </Group>
     </>
   );
 }
@@ -246,8 +416,6 @@ function archiveValue(ms: number | null) {
 
 function TabsSection() {
   const st = useKite((x) => x.s.settings);
-  const custom = !SEARCH_ENGINES.some((e) => e.template === st.searchEngine);
-  const [tpl, setTpl] = useState(custom ? st.searchEngine : '');
   return (
     <>
       <Group title="Tidying up" desc="Pinned tabs and Favorites are never archived.">
@@ -265,24 +433,10 @@ function TabsSection() {
       </Group>
       <Group title="Memory" desc="Older tabs sleep: their page unloads and reloads when you open them. Playing tabs never sleep.">
         <Row title="Tabs kept awake" value={`${st.awakeTabs} tabs`}>
-          <span className="look-inline-range">
-            <input type="range" className="range" aria-label="Tabs kept awake" min={LIMITS.awakeTabs[0]} max={LIMITS.awakeTabs[1]} value={st.awakeTabs} data-testid="set-awake" onChange={(e) => set({ awakeTabs: Number(e.target.value) })} />
-            <button className="btn small" data-testid="set-sleep-now" onClick={(e) => { e.preventDefault(); sleepOtherTabs(); }}>Sleep others now</button>
-          </span>
+          <input type="range" className="range" aria-label="Tabs kept awake" min={LIMITS.awakeTabs[0]} max={LIMITS.awakeTabs[1]} value={st.awakeTabs} data-testid="set-awake" onChange={(e) => set({ awakeTabs: Number(e.target.value) })} />
         </Row>
-      </Group>
-      <Group title="Search">
-        <Row title="Search engine">
-          <select className="input" aria-label="Search engine" value={custom ? 'custom' : st.searchEngine} data-testid="set-engine" onChange={(e) => e.target.value !== 'custom' && set({ searchEngine: e.target.value })}>
-            {SEARCH_ENGINES.map((e) => <option key={e.label} value={e.template}>{e.label}</option>)}
-            <option value="custom">Custom…</option>
-          </select>
-        </Row>
-        <Row title="Your own search engine" desc="A full https:// address with %s where the words go" stack>
-          <form className="inline-form" onSubmit={(e) => { e.preventDefault(); set({ searchEngine: tpl }); toast(getS().settings.searchEngine === tpl ? 'Search engine saved' : 'Use a full https:// address with %s where the words go'); }}>
-            <input className="input" aria-label="Custom search address" placeholder="https://example.com/search?q=%s" value={tpl} data-testid="set-engine-custom" onChange={(e) => setTpl(e.target.value)} />
-            <button className="btn">Use</button>
-          </form>
+        <Row title="Free up memory now" desc="Puts every tab to sleep except the one you're on">
+          <button className="btn small" data-testid="set-sleep-now" onClick={(e) => { e.preventDefault(); sleepOtherTabs(); }}>Sleep other tabs</button>
         </Row>
       </Group>
       <Group title="Peek" desc="A quick look at a link without leaving the page you are on.">
@@ -293,16 +447,78 @@ function TabsSection() {
         <SwitchRow title="Pop out a playing video" desc="When you switch to another tab" checked={st.autoPip} onChange={(v) => set({ autoPip: v })} testId="set-autopip" />
         <SwitchRow title="Also when you switch apps" checked={st.autoPip && st.autoPipOnAppSwitch} onChange={(v) => set({ autoPipOnAppSwitch: v })} testId="set-autopip-app" off={!st.autoPip} />
       </Group>
-      <Group title="History">
-        <Row title="Browsing history" desc="What the command bar suggests from">
-          <button className="btn small" data-testid="set-clear-history" onClick={() => { act(clearHistory); toast('History cleared'); }}>
-            Clear history
-          </button>
+    </>
+  );
+}
+
+function SearchLinks() {
+  const st = useKite((x) => x.s.settings);
+  const routes = useKite((x) => x.s.routes.length);
+  const custom = !SEARCH_ENGINES.some((e) => e.template === st.searchEngine);
+  const [tpl, setTpl] = useState(custom ? st.searchEngine : '');
+  // The box for your own engine shows only once you pick "Custom…".
+  const [ownEngine, setOwnEngine] = useState(custom);
+  return (
+    <>
+      <Group title="Search">
+        <Row title="Search engine">
+          <select
+            className="input"
+            aria-label="Search engine"
+            value={custom || ownEngine ? 'custom' : st.searchEngine}
+            data-testid="set-engine"
+            onChange={(e) => {
+              const v = e.target.value;
+              setOwnEngine(v === 'custom');
+              if (v !== 'custom') set({ searchEngine: v });
+            }}
+          >
+            {SEARCH_ENGINES.map((e) => <option key={e.label} value={e.template}>{e.label}</option>)}
+            <option value="custom">Custom…</option>
+          </select>
         </Row>
+        {ownEngine && (
+        <Row title="Your own search engine" desc="A full https:// address with %s where the words go" stack>
+          <form className="inline-form" onSubmit={(e) => { e.preventDefault(); set({ searchEngine: tpl }); toast(getS().settings.searchEngine === tpl ? 'Search engine saved' : 'Use a full https:// address with %s where the words go'); }}>
+            <input className="input" aria-label="Custom search address" placeholder="https://example.com/search?q=%s" value={tpl} data-testid="set-engine-custom" onChange={(e) => setTpl(e.target.value)} />
+            <button className="btn">Use</button>
+          </form>
+        </Row>
+        )}
+      </Group>
+      <Group title="Links from other apps" desc="Choose which Space, or a little window, opens links you click in Mail, Slack and other apps.">
+        <button className="set-link" data-testid="settings-open-routing" onClick={() => setUi({ panel: 'routing' })}>
+          <span className="import-swatch"><Route size={16} /></span>
+          <span className="set-row-text"><span className="set-row-title">Link Routing</span><span className="set-row-desc">{routes} rule{routes === 1 ? '' : 's'} · make Kite your default browser</span></span>
+          <ChevronRight size={15} className="set-link-chevron" />
+        </button>
       </Group>
     </>
   );
 }
+
+function Extensions() {
+  const boosts = useKite((x) => x.s.boosts.length);
+  return (
+    <>
+      <Group title="Extensions" desc="Chrome extensions add features to Kite.">
+        <button className="set-link" data-testid="settings-open-extensions" onClick={() => setUi({ panel: 'extensions' })}>
+          <span className="import-swatch"><Puzzle size={16} /></span>
+          <span className="set-row-text"><span className="set-row-title">Manage extensions</span><span className="set-row-desc">Add, turn off or remove extensions</span></span>
+          <ChevronRight size={15} className="set-link-chevron" />
+        </button>
+      </Group>
+      <Group title="Boosts" desc="Restyle the sites you use, or hide what you never read. Boosts stay on this computer.">
+        <button className="set-link" data-testid="settings-open-boosts" onClick={() => setUi({ panel: 'boosts' })}>
+          <span className="import-swatch"><Wand2 size={16} /></span>
+          <span className="set-row-text"><span className="set-row-title">Your Boosts</span><span className="set-row-desc">{boosts} Boost{boosts === 1 ? '' : 's'}</span></span>
+          <ChevronRight size={15} className="set-link-chevron" />
+        </button>
+      </Group>
+    </>
+  );
+}
+
 
 function Privacy() {
   const st = useKite((x) => x.s.settings);
@@ -396,6 +612,11 @@ function Privacy() {
       </Group>
 
       <Group title="Clear browsing data" desc="Clears it in every Space.">
+        <Row title="Browsing history" desc="What the command bar suggests from">
+          <button className="btn small" data-testid="set-clear-history" onClick={() => { act(clearHistory); toast('History cleared'); }}>
+            Clear history
+          </button>
+        </Row>
         <SwitchRow title="Cookies" desc="Signs you out of sites" checked={what.cookies} onChange={(v) => setWhat({ ...what, cookies: v })} testId="clear-cookies" />
         <SwitchRow title="Site data" desc="Data sites saved on this computer" checked={what.storage} onChange={(v) => setWhat({ ...what, storage: v })} testId="clear-storage" />
         <SwitchRow title="Cache" desc="Cached images and files" checked={what.cache} onChange={(v) => setWhat({ ...what, cache: v })} testId="clear-cache" />
@@ -481,29 +702,6 @@ function Keys() {
   );
 }
 
-function Links() {
-  const boosts = useKite((x) => x.s.boosts.length);
-  const routes = useKite((x) => x.s.routes.length);
-  return (
-    <Group>
-      <button className="set-link" data-testid="settings-open-routing" onClick={() => setUi({ panel: 'routing' })}>
-        <span className="import-swatch"><Route size={16} /></span>
-        <span className="set-row-text"><span className="set-row-title">Link Routing</span><span className="set-row-desc">{routes} rule{routes === 1 ? '' : 's'} · where links from other apps open · default browser</span></span>
-        <ChevronRight size={15} className="set-link-chevron" />
-      </button>
-      <button className="set-link" data-testid="settings-open-extensions" onClick={() => setUi({ panel: 'extensions' })}>
-        <span className="import-swatch"><Puzzle size={16} /></span>
-        <span className="set-row-text"><span className="set-row-title">Extensions</span><span className="set-row-desc">Add and manage Chrome extensions</span></span>
-        <ChevronRight size={15} className="set-link-chevron" />
-      </button>
-      <button className="set-link" data-testid="settings-open-boosts" onClick={() => setUi({ panel: 'boosts' })}>
-        <span className="import-swatch"><Wand2 size={16} /></span>
-        <span className="set-row-text"><span className="set-row-title">Boosts</span><span className="set-row-desc">{boosts} Boost{boosts === 1 ? '' : 's'} · restyle sites, hide clutter</span></span>
-        <ChevronRight size={15} className="set-link-chevron" />
-      </button>
-    </Group>
-  );
-}
 
 function Data() {
   const [confirm, setConfirm] = useState(false);

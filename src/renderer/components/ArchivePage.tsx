@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Search, RotateCcw, X, StickyNote, Trash2, Clock } from 'lucide-react';
+import { Archive, Search, RotateCcw, X, StickyNote, Trash2, Clock } from 'lucide-react';
 import { groupArchive, restoreArchived, deleteArchived, clearArchive, archiveAfterFor } from '@shared/archive';
 import { ARCHIVE_CHOICES } from '@shared/defaults';
 import { displayUrl } from '@shared/url';
@@ -65,7 +65,9 @@ export function ArchivePage() {
       </div>
       {groups.length === 0 && (
         <div className="empty-list" data-testid="archive-empty">
-          {q ? 'Nothing matches.' : 'Nothing here yet. Tabs you clear or don’t use for a while land here, so you never lose them.'}
+          <span className="empty-state-icon"><Archive size={20} /></span>
+          <span className="empty-state-title">{q ? 'Nothing matches' : 'Nothing archived yet'}</span>
+          <span className="empty-state-text">{q ? 'Try another word, or part of the address.' : 'Tabs you clear or don’t use for a while land here, so you never lose them.'}</span>
         </div>
       )}
       {groups.map((g) => (

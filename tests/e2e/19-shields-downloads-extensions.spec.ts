@@ -178,7 +178,7 @@ test.describe('Extensions panel', () => {
   test('add, open popup and options, turn off and on, remove (asks first)', async ({ page }) => {
     await openApp(page);
     await page.keyboard.press(`${MOD}+Comma`);
-    await page.getByTestId('settings-links').click();
+    await page.getByTestId('settings-extensions').click();
     await page.getByTestId('settings-open-extensions').click();
     await hooks(page, 't.extensionPreview = arg', preview);
     await page.getByTestId('ext-add-file').click();
@@ -202,7 +202,7 @@ test.describe('Extensions panel', () => {
   test('a bad file or link shows the reason and installs nothing', async ({ page }) => {
     await openApp(page);
     await page.keyboard.press(`${MOD}+Comma`);
-    await page.getByTestId('settings-links').click();
+    await page.getByTestId('settings-extensions').click();
     await page.getByTestId('settings-open-extensions').click();
     await hooks(page, 't.extensionPreview = arg', 'This is a Chrome theme, not an extension.');
     await page.getByTestId('ext-add-folder').click();
@@ -242,6 +242,7 @@ test.describe('Spaces with separate logins, and animation settings', () => {
     await page.keyboard.press(`${MOD}+Comma`);
     expect(await cssVar(page, '--dur')).toBe('220ms');
     expect(await cssVar(page, '--speed')).toBe('1');
+    await page.getByTestId('settings-motion').click();
     await page.getByTestId('set-speed').fill('2');
     expect(await cssVar(page, '--dur')).toBe('110ms');
     expect(await cssVar(page, '--speed')).toBe('0.5');
@@ -252,8 +253,10 @@ test.describe('Spaces with separate logins, and animation settings', () => {
     const sheetAnim = await page.getByTestId('settings').evaluate((el) => getComputedStyle(el).animationDuration);
     expect(parseFloat(sheetAnim)).toBeCloseTo(0.176, 2);
     expect((await savedState(page)).settings).toMatchObject({ motionSpeed: 2, motionFeel: 'bouncy' });
+    await page.getByTestId('settings-appearance').click();
     await page.getByTestId('set-reset-appearance').click();
     expect(await cssVar(page, '--dur')).toBe('220ms');
+    await page.getByTestId('settings-motion').click();
     await page.getByTestId('set-motion').click();
     await expect(page.getByTestId('app')).toHaveAttribute('data-motion', 'reduced');
     expect(await page.getByTestId('settings').evaluate((el) => getComputedStyle(el).animationName)).toBe('none');

@@ -1,7 +1,7 @@
 import { ArrowLeft, ArrowRight, RotateCw, PanelLeft, Plus, Search, ShieldCheck, Settings2, Archive, Sparkles, Wand2 } from 'lucide-react';
 import { boostsFor } from '@shared/boosts';
 import * as ops from '@shared/ops';
-import { displayUrl } from '@shared/url';
+import { displayUrl, isNewTabUrl } from '@shared/url';
 import { activeSpace } from '@shared/tree';
 import { act, setUi, useKite } from '../store';
 import { actions } from '../commands';
@@ -17,7 +17,9 @@ import { SecurityIcon, SiteInfo, useSecurity } from './SiteInfo';
 import { DownloadsButton } from './Downloads';
 
 export function Sidebar() {
-  const showUrl = useKite((st) => st.s.settings.showUrlBar);
+  // With nothing open, the empty page's big search box is the one place to start:
+  // the sidebar doesn't show a second, smaller one.
+  const showUrl = useKite((st) => st.s.settings.showUrlBar && !!ops.activeItemId(st.s));
   const space = useKite((st) => activeSpace(st.s));
   const shortcuts = useKite((st) => st.s.settings.shortcuts);
   const width = useKite((st) => st.s.settings.sidebarWidth);
@@ -67,7 +69,7 @@ export function Sidebar() {
           )}
         </div>
 
-        <button className="row new-tab" data-testid="btn-new-tab" onClick={actions.commandBar}>
+        <button className="row new-tab" data-testid="btn-new-tab" onClick={actions.newTabPage}>
           <Plus size={15} className="row-glyph" />
           <span className="row-title">New Tab</span>
           <kbd>{formatShortcut(shortcuts.commandBar, isMac)}</kbd>
@@ -116,7 +118,11 @@ function NavButtons() {
 }
 
 function UrlPill() {
-  const tab = useKite((st) => ops.activeTab(st.s));
+  // The start page has no address of its own: the pill reads like an empty address bar.
+  const tab = useKite((st) => {
+    const t = ops.activeTab(st.s);
+    return t && !isNewTabUrl(t.url) ? t : null;
+  });
   const boosted = useKite((st) => (tab ? boostsFor(st.s, tab.url).length > 0 : false));
   const { level } = useSecurity();
   const blocked = useKite((st) => (tab ? st.ui.blocked[tab.id] ?? 0 : 0));

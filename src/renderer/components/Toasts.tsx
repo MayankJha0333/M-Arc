@@ -5,7 +5,7 @@ export function Toasts() {
   return (
     <div className="toasts" role="status" aria-live="polite">
       {toasts.map((t) => (
-        <div key={t.id} className="toast" data-testid="toast">
+        <div key={t.id} className="toast" data-testid="toast" data-leaving={t.leaving || undefined}>
           <span>{t.text}</span>
           {t.action && (
             <button

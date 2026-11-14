@@ -1,7 +1,7 @@
 // Every user action in one place. Shortcuts, menus and the command bar all call these.
 
 import * as ops from '@shared/ops';
-import { normalizeInput } from '@shared/url';
+import { hostOf, isNewTabUrl, NEW_TAB_URL, normalizeInput } from '@shared/url';
 import { locate } from '@shared/tree';
 import type { ID } from '@shared/types';
 import { act, getS, getUi, markLoaded, setUi, toast, unload, useKite } from './store';
@@ -89,15 +89,35 @@ export function navigateTab(id: ID, url: string) {
   const h = surface(id);
   if (h) h.load(url);
   else {
-    act((d) => ops.updateTab(d, id, { url }, now()));
+    const it = getS().items[id];
+    // Leaving the new-tab page: the tab takes the site's name until the page reports its title.
+    const fromStart = it?.kind === 'tab' && isNewTabUrl(it.url);
+    act((d) => ops.updateTab(d, id, fromStart ? { url, title: hostOf(url) || url } : { url }, now()));
     markLoaded(id);
   }
 }
 
-export function selectItem(id: ID) {
-  // Picking a tab (even the one already selected) leaves the Settings page.
+/** Ask the start page on screen to put the cursor in its search box. */
+export function focusStartPage() {
+  window.dispatchEvent(new Event('kite:focus-start'));
+}
+
+/**
+ * The sidebar's "New Tab": opens a real new tab showing the start page, ready to type.
+ * If you're already on an empty new tab, it just puts the cursor back in its box.
+ */
+export function newTabPage() {
+  const tab = ops.activeTab(getS());
+  if (tab && isNewTabUrl(tab.url)) return focusStartPage();
+  act((d) => ops.newTab(d, { url: NEW_TAB_URL, title: 'New Tab', now: now() }));
+  setUi({ commandBar: null });
+}
+
+export function selectItem(id: ID, opts?: { keepSettings?: boolean }) {
+  // Picking a tab (even the one already selected) leaves the Settings page —
+  // but switching Space does not, so you can style each Space from Settings.
   const p = useKite.getState().ui.panel;
-  if (p === 'settings' || p === 'shortcuts') setUi({ panel: null, panelArg: undefined });
+  if (!opts?.keepSettings && (p === 'settings' || p === 'shortcuts')) setUi({ panel: null, panelArg: undefined });
   act((d) => ops.select(d, id, now()));
   const it = getS().items[id];
   if (it?.kind === 'tab') markLoaded(id);
@@ -144,7 +164,7 @@ export function deleteFolderCmd(id: ID) {
 /** After a Space change, make sure its selected page is loaded. */
 function afterSpaceChange() {
   const id = activeId();
-  if (id) selectItem(id);
+  if (id) selectItem(id, { keepSettings: true });
 }
 
 export function switchSpaceCmd(id: ID) {
@@ -241,8 +261,11 @@ export const actions: Record<string, () => void> = {
   commandBar: () => setUi({ commandBar: { mode: 'new', initial: '' } }),
   editUrl: () => {
     const t = ops.activeTab(getS());
+    // On the start page, the address bar is its own big box.
+    if (t && isNewTabUrl(t.url)) return focusStartPage();
     setUi({ commandBar: { mode: t ? 'edit' : 'new', initial: t?.url ?? '' } });
   },
+  newTabPage: () => newTabPage(),
   closeTab: () => {
     const ui = getUi();
     if (ui.peek) return closePeekHook();

@@ -12,7 +12,7 @@ const cssVar = (page: Page, name: string) => page.getByTestId('app').evaluate((e
 test.describe('settings: appearance', () => {
   test('sidebar can move to the right', async ({ page }) => {
     await openApp(page);
-    await openSettings(page);
+    await openSettings(page, 'layout');
     await page.getByTestId('set-side-right').click();
     await expect(page.getByTestId('app')).toHaveAttribute('data-side', 'right');
     const sb = (await page.getByTestId('sidebar').boundingBox())!;
@@ -22,14 +22,16 @@ test.describe('settings: appearance', () => {
   test('spacing, font, text size, corners, page margin and sidebar width all apply', async ({ page }) => {
     await openApp(page);
     await newTab(page, 'a.com');
-    await openSettings(page);
+    await openSettings(page, 'layout');
     await page.getByTestId('set-density-compact').click();
     await expect(page.getByTestId('app')).toHaveAttribute('data-density', 'compact');
     expect(await cssVar(page, '--row-h')).toBe('30px');
+    await page.getByTestId('settings-appearance').click();
     await page.getByTestId('set-font-mono').click();
     expect(await cssVar(page, '--font')).toContain('monospace');
     await page.getByTestId('set-scale').fill('1.15');
     expect(await cssVar(page, '--scale')).toBe('1.15');
+    await page.getByTestId('settings-layout').click();
     await page.getByTestId('set-radius').fill('20');
     await expect(page.getByTestId('page-card')).toHaveCSS('border-radius', '20px');
     await page.getByTestId('set-gap').fill('0');
@@ -42,12 +44,13 @@ test.describe('settings: appearance', () => {
 
   test('hide the address bar; reduce motion; favorites per row', async ({ page }) => {
     await openApp(page);
-    await openSettings(page);
+    await openSettings(page, 'layout');
     await page.getByTestId('set-urlbar').click();
     await expect(page.getByTestId('url-pill')).toHaveCount(0);
+    await page.getByTestId('set-favcols').fill('6');
+    await page.getByTestId('settings-motion').click();
     await page.getByTestId('set-motion').click();
     await expect(page.getByTestId('app')).toHaveAttribute('data-motion', 'reduced');
-    await page.getByTestId('set-favcols').fill('6');
     expect((await savedState(page)).settings.favoritesColumns).toBe(6);
   });
 
@@ -56,29 +59,37 @@ test.describe('settings: appearance', () => {
     await openSettings(page);
     await page.getByTestId('set-chrome-css').fill('.space-name { color: rgb(200, 0, 0) !important; }');
     await expect(page.getByTestId('space-name')).toHaveCSS('color', 'rgb(200, 0, 0)');
+    await page.getByTestId('settings-layout').click();
     await page.getByTestId('set-side-right').click();
+    await page.getByTestId('settings-appearance').click();
     await page.getByTestId('set-reset-appearance').click();
     await expect(page.getByTestId('app')).toHaveAttribute('data-side', 'left');
     await expect(page.getByTestId('space-name')).not.toHaveCSS('color', 'rgb(200, 0, 0)');
   });
 
-  test('the Space colors card opens the Space editor', async ({ page }) => {
+  test('Appearance points to this Space\'s background, which lives on the Spaces page', async ({ page }) => {
     await openApp(page);
     await openSettings(page);
-    await page.getByTestId('settings-space-theme').click();
-    await expect(page.getByTestId('space-editor')).toBeVisible();
+    await expect(page.getByTestId('settings-scope')).toHaveText('All Spaces');
+    await page.getByTestId('settings-open-background').click();
+    await expect(page.getByTestId('settings-spaces')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('settings-scope')).toHaveText('This Space');
+    await expect(page.getByTestId('bg-kind')).toBeVisible();
   });
 });
 
 test.describe('settings: tabs, search, keyboard, data', () => {
   test('search engine: pick one or use your own', async ({ page }) => {
     await openApp(page);
-    await openSettings(page, 'tabs');
+    await openSettings(page, 'links');
     await page.getByTestId('set-engine').selectOption({ label: 'Kagi' });
     await page.keyboard.press('Escape');
     await newTab(page, 'paper planes');
     await expect(page.getByTestId('url-pill')).toContainText('kagi.com');
-    await openSettings(page, 'tabs');
+    await openSettings(page, 'links');
+    // The box for your own engine appears only after picking "Custom…".
+    await expect(page.getByTestId('set-engine-custom')).toHaveCount(0);
+    await page.getByTestId('set-engine').selectOption({ label: 'Custom…' });
     await page.getByTestId('set-engine-custom').fill('https://search.example/find?words=%s');
     await page.getByTestId('set-engine-custom').press('Enter');
     await page.keyboard.press('Escape');
@@ -158,17 +169,17 @@ test.describe('settings: tabs, search, keyboard, data', () => {
   test('clear history', async ({ page }) => {
     await openApp(page);
     await newTab(page, 'a.com');
-    await openSettings(page, 'tabs');
+    await openSettings(page, 'privacy');
     await page.getByTestId('set-clear-history').click();
     expect((await savedState(page)).history).toEqual([]);
   });
 
-  test('links section opens Routing and Boosts', async ({ page }) => {
+  test('Search & Links opens Routing; Extensions & Boosts opens Boosts', async ({ page }) => {
     await openApp(page);
     await openSettings(page, 'links');
     await page.getByTestId('settings-open-routing').click();
     await expect(page.getByTestId('routing-panel')).toBeVisible();
-    await openSettings(page, 'links');
+    await openSettings(page, 'extensions');
     await page.getByTestId('settings-open-boosts').click();
     await expect(page.getByTestId('boosts-list')).toBeVisible();
   });
@@ -179,7 +190,7 @@ test.describe('settings layout and search', () => {
     await openApp(page);
     await page.keyboard.press(`${MOD}+Comma`);
     const tabs = page.locator('.settings-tab');
-    await expect(tabs).toHaveCount(7);
+    await expect(tabs).toHaveCount(11);
     await page.getByTestId('settings-search').fill('cookie');
     await expect(tabs).toHaveCount(1);
     await expect(page.getByTestId('settings-privacy')).toHaveAttribute('aria-selected', 'true');
@@ -189,7 +200,7 @@ test.describe('settings layout and search', () => {
     await expect(page.getByTestId('settings-nomatch')).toBeVisible();
     await page.getByTestId('settings-search').press('Escape');
     await expect(page.getByTestId('settings-search')).toHaveValue('');
-    await expect(tabs).toHaveCount(7);
+    await expect(tabs).toHaveCount(11);
     await expect(page.getByTestId('settings')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('settings')).toHaveCount(0);
@@ -237,5 +248,30 @@ test.describe('settings is a page, not a dialog', () => {
     await page.keyboard.press(`${MOD}+Comma`);
     await newTab(page, 'c.com');
     await expect(page.getByTestId('settings')).toHaveCount(0);
+  });
+});
+
+test.describe('design review fixes', () => {
+  test('an empty window has one place to search; the sidebar address bar comes back with a tab', async ({ page }) => {
+    await openApp(page);
+    await expect(page.getByTestId('start-input')).toHaveAttribute('placeholder', 'Search or enter address');
+    await expect(page.getByTestId('url-pill')).toHaveCount(0);
+    await newTab(page, 'a.com');
+    await expect(page.getByTestId('url-pill')).toHaveText('a.com');
+  });
+
+  test('the Settings button stays lit while Settings is open', async ({ page }) => {
+    await openApp(page);
+    const bg = () => page.getByTestId('btn-settings').evaluate((el) => getComputedStyle(el).backgroundColor);
+    const before = await bg();
+    await page.keyboard.press(`${MOD}+Comma`);
+    await expect.poll(bg).not.toBe(before);
+  });
+
+  test('tab close buttons are at least 24px (WCAG 2.2 target size)', async ({ page }) => {
+    await openApp(page);
+    await newTab(page, 'a.com');
+    const b = (await page.locator('.row[data-active] .row-btn').first().boundingBox())!;
+    expect(Math.min(b.width, b.height)).toBeGreaterThanOrEqual(24);
   });
 });

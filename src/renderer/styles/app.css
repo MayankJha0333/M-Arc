@@ -531,8 +531,8 @@ body.dragging .favorites-empty {
   display: none;
   flex: none;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -686,12 +686,12 @@ body.dragging .drop-hint {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 22px;
+  height: 24px;
   padding: 0 8px;
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--ink-3);
+  color: var(--ink-2);
   font-size: calc(11.5px * var(--scale));
   font-weight: 600;
 }
@@ -1030,7 +1030,7 @@ body.dragging .drop-hint {
 
 .cb-icon {
   flex: none;
-  color: var(--ink-3);
+  color: var(--ink-4);
 }
 
 .cb-input {
@@ -1681,10 +1681,17 @@ select.input {
 }
 
 .empty-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: 44ch;
+  margin: 0 auto;
   padding: 36px 16px;
   text-align: center;
-  color: var(--ink-3);
+  color: var(--ink-2);
   line-height: 1.5;
+  animation: rise-in calc(var(--dur, 220ms) * 1.4) var(--ease-out) backwards;
 }
 
 .arch-group {
@@ -1757,7 +1764,7 @@ select.input {
 }
 
 .arch-restore-icon {
-  color: var(--ink-3);
+  color: var(--ink-4);
   opacity: 0;
 }
 
@@ -2411,7 +2418,7 @@ body.resizing-v * {
 }
 
 .route-arrow {
-  color: var(--ink-3);
+  color: var(--ink-4);
   font-weight: 700;
 }
 
@@ -3150,7 +3157,7 @@ body.resizing-v * {
 
 .set-link-chevron {
   flex: none;
-  color: var(--ink-3);
+  color: var(--ink-4);
   transition: transform calc(var(--dur, 220ms) * 1) var(--ease-out), color var(--t-fast);
 }
 
@@ -3357,7 +3364,7 @@ body.resizing-v * {
 }
 
 .row-sound[data-muted] {
-  color: var(--ink-3);
+  color: var(--ink-4);
 }
 
 .field-inline[data-off] {
@@ -5151,8 +5158,12 @@ button.dl-name:not(:disabled):hover {
   outline-offset: 2px;
 }
 
-.app :where(.input, .cb input, .find-bar input):focus-visible {
-  outline-offset: 0;
+/* Text fields share one focus look with the start page and Settings search: a soft accent ring. */
+.app .input:focus,
+.app .input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 /* Sidebar top: the sidebar switch sits by the window buttons, navigation at the far end. */
@@ -5249,4 +5260,880 @@ button.dl-name:not(:disabled):hover {
 .app .cb-input:focus-visible,
 .app .find-bar input:focus-visible {
   outline: none;
+}
+
+/* The Settings button stays lit while the Settings page is open, so you know where you are. */
+.app[data-page] [data-testid='btn-settings'] {
+  background: var(--active);
+  color: var(--ink);
+  box-shadow: var(--active-shadow);
+}
+
+/* ==== Space background: animated gradient =====================================
+   The gradient itself is the window's background (--backdrop). When a Space asks for
+   motion, a larger copy of it is laid on top and moved with transform only, which the
+   GPU composites cheaply (no repainting the gradient every frame). Reduce Motion stops it. */
+.bg-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.bg-paint {
+  position: absolute;
+  inset: -25%;
+  background: var(--backdrop);
+  will-change: transform;
+  animation: bg-drift var(--bg-motion-dur, 24s) var(--ease-move) infinite alternate;
+}
+
+.bg-fx[data-motion='swirl'] .bg-paint {
+  inset: -45%;
+  animation-name: bg-swirl;
+}
+
+.bg-fx[data-motion='spin'] .bg-paint {
+  /* A square wider than the window's diagonal, so no corner ever shows while it turns
+     (any window shape: the diagonal is at most 1.42 × its longer side). */
+  inset: auto;
+  left: 50%;
+  top: 50%;
+  width: 150vmax;
+  height: 150vmax;
+  margin: -75vmax 0 0 -75vmax;
+  animation-name: bg-spin;
+  animation-timing-function: linear;
+  animation-direction: normal;
+}
+
+.bg-fx[data-motion='breathe'] .bg-paint {
+  animation-name: bg-breathe;
+}
+
+.bg-fx[data-motion='hue'] .bg-paint {
+  inset: 0;
+  animation-name: bg-hue;
+  animation-timing-function: linear;
+  animation-direction: normal;
+}
+
+@keyframes bg-drift {
+  from { transform: translate3d(-7%, -5%, 0) scale(1.02); }
+  to { transform: translate3d(7%, 5%, 0) scale(1.08); }
+}
+
+@keyframes bg-swirl {
+  from { transform: rotate(-14deg) scale(1.05); }
+  to { transform: rotate(14deg) scale(1.12); }
+}
+
+@keyframes bg-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes bg-breathe {
+  from { transform: scale(1); }
+  to { transform: scale(1.18) translate3d(2%, -2%, 0); }
+}
+
+@keyframes bg-hue {
+  to { filter: hue-rotate(360deg); }
+}
+
+
+
+
+/* ==== Settings: grouped navigation and scope ==================================== */
+.settings-navgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-navgroup + .settings-navgroup {
+  margin-top: 14px;
+}
+
+.settings-navgroup-label {
+  padding: 0 10px 4px;
+  color: var(--ink-3);
+  font-size: calc(11px * var(--scale));
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Says who a page changes: the whole window, or just this Space. */
+.settings-scope {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  margin-left: 10px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--hover);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink-2);
+  font-family: var(--font);
+  font-size: calc(11px * var(--scale));
+  font-weight: 600;
+  letter-spacing: 0;
+  vertical-align: 4px;
+}
+
+/* The look bar: readability on the left, the preview's Apply/Discard on the right. */
+.settings-body .look-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 46px;
+  padding: 7px 8px 7px 12px;
+  border-radius: var(--r-lg);
+  background: var(--set-card);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.settings-body .look-bar[data-dirty] {
+  position: sticky;
+  z-index: 2;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent), var(--elev-2);
+}
+
+.look-read {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-2);
+  font-size: calc(12px * var(--scale));
+}
+
+.look-read b {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.look-read[data-ok] > svg {
+  color: #2f9e6a;
+}
+
+.look-read:not([data-ok]) > svg {
+  color: #c4622d;
+}
+
+.look-read-ok {
+  color: #2f9e6a;
+  font-weight: 600;
+}
+
+.app[data-theme='dark'] .look-read-ok,
+.app[data-theme='dark'] .look-read[data-ok] > svg {
+  color: #5fd39b;
+}
+
+.look-bar-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: calc(12px * var(--scale));
+  font-weight: 600;
+}
+
+.bg-mini {
+  display: inline-block;
+  width: 64px;
+  height: 36px;
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 1px var(--line);
+  vertical-align: middle;
+}
+
+/* ==== Settings → Spaces ========================================================== */
+.space-picker {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 2px 4px;
+  scrollbar-width: none;
+}
+
+.space-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  min-width: 150px;
+  padding: 8px 14px 8px 8px;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: var(--set-card);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  transition: box-shadow var(--t-fast), background var(--t-fast), transform var(--t-fast) var(--ease-out);
+}
+
+.space-pick:hover {
+  background: color-mix(in srgb, var(--ink) 4%, var(--card));
+}
+
+.space-pick[data-on] {
+  background: var(--card);
+  box-shadow: inset 0 0 0 2px var(--accent), var(--elev-1);
+}
+
+.space-pick.add {
+  min-width: 0;
+  color: var(--ink-2);
+  box-shadow: inset 0 0 0 1.5px var(--line);
+  background: transparent;
+  border: 1.5px dashed transparent;
+}
+
+.space-pick-sw {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--hover);
+  font-size: 17px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.space-pick-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.space-pick-name {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.space-pick-meta {
+  color: var(--ink-3);
+  font-size: calc(11.5px * var(--scale));
+}
+
+.set-row .emoji-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.set-row-control > .input[data-testid='set-space-name'] {
+  width: 260px;
+}
+
+.space-more-look {
+  margin: 4px 0 8px;
+  border-radius: var(--r-md);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+/* ==== Background studio ========================================================== */
+.bg-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+  gap: 8px;
+  padding: 12px 14px 14px;
+}
+
+.bg-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 6px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: calc(12px * var(--scale));
+  font-weight: 600;
+  transition: box-shadow var(--t-fast), color var(--t-fast), background var(--t-fast), transform var(--t-fast) var(--ease-out);
+}
+
+.bg-tile:hover {
+  color: var(--ink);
+  background: var(--hover);
+}
+
+.bg-tile[data-on] {
+  color: var(--ink);
+  background: var(--card);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.bg-tile:active {
+  transform: scale(0.97);
+}
+
+.bg-tile-sample {
+  position: relative;
+  display: block;
+  height: 46px;
+  overflow: hidden;
+  border-radius: 8px;
+  background-color: color-mix(in srgb, var(--ink) 4%, var(--card));
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+/* Each animation tile plays its movement, faster, so you can see it before picking. */
+.bg-motion-paint {
+  position: absolute;
+  inset: -40%;
+  background: var(--backdrop);
+}
+
+.bg-motion-sample[data-motion='drift'] .bg-motion-paint { animation: bg-drift 3s var(--ease-move) infinite alternate; }
+.bg-motion-sample[data-motion='swirl'] .bg-motion-paint { animation: bg-swirl 3.5s var(--ease-move) infinite alternate; }
+.bg-motion-sample[data-motion='spin'] .bg-motion-paint { inset: auto; left: -75%; top: 50%; width: 250%; aspect-ratio: 1; margin-top: -125%; animation: bg-spin 6s linear infinite; }
+.bg-motion-sample[data-motion='breathe'] .bg-motion-paint { animation: bg-breathe 2.5s var(--ease-move) infinite alternate; }
+.bg-motion-sample[data-motion='hue'] .bg-motion-paint { inset: 0; animation: bg-hue 6s linear infinite; }
+
+.bg-tile-label {
+  text-align: center;
+}
+
+/* Gradient editor: a bar of the gradient with one handle per colour. */
+.grad-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.grad-bar {
+  position: relative;
+  height: 34px;
+  margin: 6px 11px 4px;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+  cursor: copy;
+  touch-action: none;
+}
+
+.grad-stop {
+  position: absolute;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25), 0 2px 6px rgba(0, 0, 0, 0.25);
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  transition: transform var(--t-fast) var(--ease-out), box-shadow var(--t-fast);
+}
+
+.grad-stop:hover {
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.grad-stop:active {
+  cursor: grabbing;
+}
+
+.grad-stop[data-on] {
+  transform: translate(-50%, -50%) scale(1.18);
+  box-shadow: 0 0 0 2px var(--accent), 0 3px 10px rgba(0, 0, 0, 0.3);
+}
+
+.app .grad-stop:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.grad-stop-edit {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.grad-stop-at {
+  color: var(--ink-2);
+  font-size: calc(12px * var(--scale));
+  font-variant-numeric: tabular-nums;
+}
+
+.bg-angle {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bg-angle .range {
+  width: 180px;
+}
+
+.angle-dial {
+  position: relative;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1.5px var(--line);
+}
+
+.angle-dial-hand {
+  position: absolute;
+  left: calc(50% - 1px);
+  top: 4px;
+  width: 2px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform-origin: 1px 10px;
+  transition: transform var(--t-fast) var(--ease-out);
+}
+
+.bg-tiles[data-cols='4'] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.bg-tiles[data-cols='3'] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.set-row .emoji-input {
+  width: 64px;
+  text-align: center;
+}
+
+@container (max-width: 720px) {
+  .bg-tiles[data-cols='4'],
+  .bg-tiles[data-cols='3'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+
+/* ==== Start page (new tab, and the window with nothing open) ====================
+   Hierarchy: greeting (quiet) → search box (the hero) → Favorites → Frequently visited.
+   Motion follows the HyperFrames rules: the greeting blurs in, the box rises on a long
+   tail, tiles cascade 40 ms apart; nothing loops, only opacity, transform and blur move. */
+.start {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background:
+    radial-gradient(70% 55% at 30% 0%, color-mix(in srgb, var(--tint-1) 26%, transparent), transparent 70%),
+    radial-gradient(60% 50% at 85% 10%, color-mix(in srgb, var(--tint-2) 12%, transparent), transparent 70%),
+    var(--card);
+  container-type: inline-size;
+}
+
+.start-inner {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, calc(100% - 64px));
+  margin: 0 auto;
+  padding: clamp(40px, 15vh, 150px) 0 32px;
+}
+
+.start-hello {
+  margin-bottom: 20px;
+  padding-left: 4px;
+}
+
+.start-greet {
+  margin: 0;
+  font-family: 'Bricolage Grotesque', var(--font);
+  font-size: calc(30px * var(--scale));
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  animation: blur-in calc(var(--dur, 220ms) * 1.2) var(--ease-out) backwards;
+}
+
+.start-date {
+  margin: 6px 0 0;
+  color: var(--ink-2);
+  font-size: calc(13.5px * var(--scale));
+  animation: fade-in calc(var(--dur, 220ms) * 1.4) var(--ease-out) calc(var(--dur, 220ms) * 0.3) backwards;
+}
+
+.start-box {
+  position: relative;
+  z-index: 2;
+  animation: rise-in calc(var(--dur, 220ms) * 1.5) var(--ease-out) calc(var(--dur, 220ms) * 0.4) backwards;
+}
+
+.start-search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 56px;
+  padding: 0 12px 0 14px;
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgba(40, 30, 20, 0.04), 0 12px 32px -8px rgba(40, 30, 20, 0.14);
+  cursor: text;
+  transition: box-shadow calc(var(--dur, 220ms) * 1) var(--ease-out), transform calc(var(--dur, 220ms) * 1) var(--ease-out), border-radius var(--t-fast);
+}
+
+.app[data-theme='dark'] .start-search {
+  background: color-mix(in srgb, var(--ink) 5%, var(--card));
+  box-shadow: inset 0 0 0 1px var(--line), 0 12px 32px -8px rgba(0, 0, 0, 0.5);
+}
+
+.start-search:hover {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 18%, transparent), 0 1px 2px rgba(40, 30, 20, 0.05), 0 16px 40px -10px rgba(40, 30, 20, 0.18);
+}
+
+.start-search:focus-within {
+  transform: translateY(-1px);
+  box-shadow: inset 0 0 0 1.5px var(--accent), 0 0 0 4px var(--accent-soft), 0 18px 44px -12px rgba(40, 30, 20, 0.2);
+}
+
+.start-box[data-open] .start-search {
+  border-radius: 18px 18px 0 0;
+}
+
+/* The Kite mark lives in the box: the brand where your attention already is. */
+.start-brand {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  transition: transform calc(var(--dur, 220ms) * 1.4) var(--ease-out);
+}
+
+.start-search:focus-within .start-brand {
+  transform: rotate(-8deg) translateY(-1px);
+}
+
+.start-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: calc(16px * var(--scale));
+  outline: none;
+  user-select: text;
+}
+
+.app .start-input:focus-visible {
+  outline: none;
+}
+
+.start-input::placeholder {
+  color: var(--ink-3);
+}
+
+.start-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 26px;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+
+.start-kbd[data-typing] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+}
+
+.start-suggest {
+  position: absolute;
+  z-index: 3; /* above the box's soft focus ring, so the seam is one clean line */
+  top: calc(100% - 2.5px); /* the focused box lifts 1px; follow it */
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border-radius: 0 0 18px 18px;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1.5px var(--accent), 0 0 0 4px var(--accent-soft), 0 20px 44px -12px rgba(20, 16, 12, 0.22);
+  clip-path: inset(1.5px -40px -80px -40px); /* hide its top edge so box and list share one line */
+  transform-origin: 50% 0;
+  animation: menu-in calc(var(--dur, 220ms) * 0.7) var(--ease-out);
+}
+
+.start-suggest li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 11px;
+  cursor: default;
+  transition: background var(--t-fast);
+}
+
+.start-suggest li[data-on] {
+  background: var(--accent-soft);
+}
+
+.start-sug-title {
+  flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.start-sug-url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: calc(12px * var(--scale));
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.start-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  margin-top: 40px;
+  transition: opacity var(--t-fast);
+}
+
+.start-sections[data-hidden] {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.start-sec-h {
+  margin: 0 0 10px;
+  padding-left: 4px;
+  color: var(--ink-3);
+  font-size: calc(11.5px * var(--scale));
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  animation: fade-in calc(var(--dur, 220ms) * 1.4) var(--ease-out) calc(var(--dur, 220ms) * 0.8) backwards;
+}
+
+.start-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 6px;
+}
+
+@container (max-width: 620px) {
+  .start-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.start-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 4px 9px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: calc(12px * var(--scale));
+  font-weight: 550;
+  /* Cascade in: each tile 40 ms after the one before (capped). */
+  animation: tile-in calc(var(--dur, 220ms) * 1.6) var(--ease-out) backwards;
+  animation-delay: calc((var(--dur, 220ms) * 0.9) + min(var(--i, 0), 10) * 40ms * var(--speed, 1));
+  transition: background var(--t-fast), color var(--t-fast);
+}
+
+@keyframes tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+}
+
+.start-tile:hover {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  color: var(--ink);
+}
+
+.start-tile-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 15px;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgba(40, 30, 20, 0.05), 0 4px 12px -4px rgba(40, 30, 20, 0.12);
+  transition: transform calc(var(--dur, 220ms) * 1) var(--ease-out), box-shadow calc(var(--dur, 220ms) * 1) var(--ease-out);
+}
+
+.app[data-theme='dark'] .start-tile-icon {
+  background: color-mix(in srgb, var(--ink) 7%, var(--card));
+  box-shadow: inset 0 0 0 1px var(--line), 0 4px 12px -4px rgba(0, 0, 0, 0.5);
+}
+
+.start-tile:hover .start-tile-icon {
+  transform: translateY(-2px);
+  box-shadow: inset 0 0 0 1px var(--line), 0 2px 4px rgba(40, 30, 20, 0.06), 0 10px 22px -6px rgba(40, 30, 20, 0.2);
+}
+
+.start-tile:active .start-tile-icon {
+  transform: scale(0.94);
+  transition-duration: var(--t-fast);
+}
+
+.start-tile-icon .site-icon {
+  border-radius: 7px;
+}
+
+.start-tile-name {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.start-foot {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: auto;
+  padding: 20px 24px 22px;
+  color: var(--ink-3);
+  font-size: calc(12px * var(--scale));
+  animation: fade-in calc(var(--dur, 220ms) * 2) var(--ease-out) calc(var(--dur, 220ms) * 1.4) backwards;
+}
+
+.start-foot kbd {
+  margin-right: 5px;
+}
+
+.site-icon.newtab {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 4px;
+  background: var(--hover);
+  color: var(--ink-2);
+}
+
+/* A toast leaves faster than it arrived, easing in (HyperFrames: exits are ~45% shorter). */
+.toast[data-leaving] {
+  animation: toast-out var(--t-exit) var(--ease-in) forwards;
+  pointer-events: none;
+}
+
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+    filter: blur(2px);
+  }
+}
+
+.cb-brand {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  animation: brand-tilt calc(var(--dur, 220ms) * 1.6) var(--ease-out);
+}
+
+/* The mark tilts into place as the bar opens, then holds still. */
+@keyframes brand-tilt {
+  from {
+    transform: rotate(-14deg) scale(0.85);
+    opacity: 0;
+  }
+}
+
+/* Empty states share one pattern: an icon in a soft circle, a title, then a line of help. */
+.empty-state-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 8px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.empty-state-title {
+  color: var(--ink);
+  font-size: calc(14px * var(--scale));
+  font-weight: 650;
+}
+
+.empty-state-text {
+  font-size: calc(12.5px * var(--scale));
+}
+
+/* Sheets leave too: faster than they came, easing in (HyperFrames: exits ~45% shorter). */
+.sheet-scrim[data-leaving] {
+  animation: fade-out var(--t-exit) var(--ease-in) forwards;
+}
+
+.sheet-scrim[data-leaving] .sheet,
+.kite-page[data-leaving] {
+  animation: sheet-out var(--t-exit) var(--ease-in) forwards;
+  pointer-events: none;
+}
+
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+/* One brand mark everywhere: an app-icon chip in the Space's accent with a white kite. */
+.start-brand,
+.cb-brand {
+  --tint-1: rgb(255 255 255 / 0.7);
+  --tint-2: #fff;
+  --ink: #fff;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 78%, #fff), var(--accent));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28),
+    0 2px 6px color-mix(in srgb, var(--accent) 35%, transparent);
+  color: #fff;
+}
+
+/* Site names may take two lines so "Hacker News" isn't cut off. */
+.start-tile-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: anywhere;
 }

@@ -78,6 +78,12 @@ function Shell() {
       data-space={spaceId}
       data-page={onSettings ? 'settings' : undefined}
     >
+      {/* The Space's background, moving: a copy of the gradient laid on top only when animated. */}
+      {theme.motion && (
+        <div className="bg-fx" aria-hidden="true" data-motion={theme.motion.kind}>
+          <div className="bg-paint" />
+        </div>
+      )}
       <div className="grain" aria-hidden="true" />
       <Sidebar />
       {collapsed && <EdgeHotzone side={settings.sidebarSide} />}

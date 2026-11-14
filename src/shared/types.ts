@@ -1,3 +1,4 @@
+import type { SpaceGradient, SpaceMotion } from './background';
 // Kite's whole saved state. Everything here is plain JSON so it can be
 // written to disk as-is and checked by tests without a browser.
 
@@ -65,6 +66,10 @@ export interface SpaceTheme {
   /** 0–1, how strongly the colors tint the chrome. */
   intensity: number;
   grain: boolean;
+  /** A gradient you designed; without it the background comes from `colors` and the style. */
+  gradient?: SpaceGradient;
+  /** Slow movement of the background (never with Reduce Motion). */
+  motion?: SpaceMotion;
 }
 
 export interface Space {

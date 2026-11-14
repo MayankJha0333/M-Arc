@@ -87,7 +87,13 @@ export function RoutingPanel() {
           <span className="field-label">Rules</span>
           <span className="muted">Checked top to bottom — the first match wins.</span>
         </div>
-        {routes.length === 0 && <div className="empty-list">No rules yet. Example: send every spotify.com link to your Personal Space.</div>}
+        {routes.length === 0 && (
+          <div className="empty-list">
+            <span className="empty-state-icon"><Route size={20} /></span>
+            <span className="empty-state-title">No rules yet</span>
+            <span className="empty-state-text">For example, send every spotify.com link to your Personal Space.</span>
+          </div>
+        )}
         {routes.map((r, i) => (
           <div key={r.id} className="route-row" data-testid="route-row" data-enabled={r.enabled || undefined}>
             <select className="input" value={r.matchType} data-testid="route-match" onChange={(e) => act((d) => updateRoute(d, r.id, { matchType: e.target.value as RouteMatchType }))}>

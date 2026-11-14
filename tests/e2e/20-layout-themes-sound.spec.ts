@@ -66,6 +66,7 @@ test.describe('layout: no wasted space around the page', () => {
     await openDesktop(page);
     await newTab(page, 'https://a.com');
     await page.keyboard.press(`${MOD}+Comma`);
+    await page.getByTestId('settings-layout').click();
     await page.getByTestId('set-gap').fill('0');
     await page.getByTestId('sheet-close').click();
     await page.keyboard.press(`${MOD}+s`);
@@ -78,6 +79,7 @@ test.describe('layout: no wasted space around the page', () => {
     await openDesktop(page);
     await newTab(page, 'https://a.com');
     await page.keyboard.press(`${MOD}+Comma`);
+    await page.getByTestId('settings-layout').click();
     await page.getByTestId('set-side-right').click();
     await page.getByTestId('sheet-close').click();
     const card = (await page.getByTestId('page-card').boundingBox())!;
@@ -129,12 +131,17 @@ test.describe('themes', () => {
   });
 
   test('every theme previews live, can be applied, and keeps text readable in light and dark', async ({ page }) => {
+    // 12 themes × 2 modes, moving between two Settings pages each time.
+    test.setTimeout(60_000);
     await openDesktop(page);
     await newTab(page, 'https://a.com');
     await page.keyboard.press(`${MOD}+Comma`);
     for (const id of ['daybreak', 'harbor', 'aurora', 'lagoon', 'ink', 'graphite', 'nebula', 'ember', 'sakura', 'moss', 'tahoe', 'dusk']) {
+      await page.getByTestId('settings-appearance').click();
       await page.getByTestId(`look-theme-${id}`).click();
       await expect(page.getByTestId(`look-theme-${id}`)).toHaveAttribute('aria-checked', 'true');
+      // Light or dark is chosen per Space, on the Spaces page; the preview carries over.
+      await page.getByTestId('settings-spaces').click();
       for (const mode of ['light', 'dark']) {
         await page.getByTestId(`look-mode-${mode}`).click();
         await expect(page.getByTestId('app')).toHaveAttribute('data-theme', mode);
@@ -143,6 +150,7 @@ test.describe('themes', () => {
         await expect(page.locator('.row[data-active]')).toBeVisible();
       }
     }
+    await page.getByTestId('settings-appearance').click();
     await page.getByTestId('look-theme-nebula').click();
     await page.getByTestId('look-apply').click();
     await expect(page.getByTestId('app')).toHaveAttribute('data-style', 'studio');
@@ -177,6 +185,7 @@ test.describe('interface sounds', () => {
   test('they can be turned off, the volume is saved, and "Play" lets you hear it', async ({ page }) => {
     await openDesktop(page);
     await page.keyboard.press(`${MOD}+Comma`);
+    await page.getByTestId('settings-motion').click();
     await page.getByTestId('set-volume').fill('0.8');
     await page.getByTestId('set-sounds').click();
     expect((await savedState(page)).settings).toMatchObject({ sounds: false, soundVolume: 0.8 });
@@ -186,6 +195,7 @@ test.describe('interface sounds', () => {
     await page.keyboard.press(`${MOD}+w`);
     expect((await sounds(page)).length).toBe(before); // silence
     await page.keyboard.press(`${MOD}+Comma`);
+    await page.getByTestId('settings-motion').click();
     // Volume and Play are greyed out while sounds are off.
     await expect(page.locator('.set-row[data-off]').filter({ has: page.getByTestId('set-volume') })).toHaveCount(1);
     await page.getByTestId('set-sounds').click();

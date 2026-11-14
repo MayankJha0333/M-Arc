@@ -7,6 +7,7 @@ import { getS, setUi, useKite } from '../store';
 import { actions, openUrl, selectItem, switchSpaceCmd } from '../commands';
 import { isMac } from '../platform';
 import { SiteIcon } from './SiteIcon';
+import { KiteLogo } from './KiteLogo';
 
 export function CommandBar() {
   const cb = useKite((st) => st.ui.commandBar);
@@ -93,14 +94,15 @@ function CommandBarInner({ mode, initial, target }: { mode: 'new' | 'edit'; init
     <div className="cb-scrim" data-testid="command-bar" onMouseDown={(e) => e.target === e.currentTarget && close()}>
       <div className="cb" role="dialog" aria-label="Command bar">
         <div className="cb-input-row">
-          <Search size={18} className="cb-icon" />
+          {/* The same Kite mark as the start page's box: one search, one look. */}
+          <span className="cb-icon cb-brand" aria-hidden="true"><KiteLogo size={18} /></span>
           <input
             ref={ref}
             className="cb-input"
             data-testid="cb-input"
             value={q}
             spellCheck={false}
-            placeholder={target === 'split' ? 'Open in a new split pane…' : mode === 'edit' ? 'Enter a new address' : 'Search, open a URL or run a command'}
+            placeholder={target === 'split' ? 'Open in a new split pane…' : mode === 'edit' ? 'Enter a new address' : 'Search or enter address, or run a command'}
             role="combobox"
             aria-expanded={results.length > 0}
             aria-controls="cb-list"

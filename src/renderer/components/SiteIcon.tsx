@@ -1,9 +1,18 @@
+import { Search } from 'lucide-react';
 import { useState } from 'react';
-import { siteLetter, hostOf } from '@shared/url';
+import { siteLetter, hostOf, isNewTabUrl } from '@shared/url';
 
 /** A page's favicon, or a colored letter tile when there isn't one. */
 export function SiteIcon({ url, favicon, title, size = 16 }: { url: string; favicon?: string; title?: string; size?: number }) {
   const [broken, setBroken] = useState<string | null>(null);
+  // Kite's own new-tab page.
+  if (isNewTabUrl(url)) {
+    return (
+      <span className="site-icon newtab" style={{ width: size, height: size }} aria-hidden="true">
+        <Search size={Math.round(size * 0.66)} />
+      </span>
+    );
+  }
   if (favicon && broken !== favicon) {
     return <img className="site-icon" src={favicon} width={size} height={size} alt="" draggable={false} onError={() => setBroken(favicon)} />;
   }

@@ -15,6 +15,8 @@ export interface Toast {
   text: string;
   actionLabel?: string;
   action?: () => void;
+  /** Playing its exit animation; removed a moment later. */
+  leaving?: boolean;
 }
 
 export interface ContextMenuItem {
@@ -123,6 +125,9 @@ let toastSeq = 1;
 export function toast(text: string, actionLabel?: string, action?: () => void, ms = 4200) {
   const id = toastSeq++;
   setUi((u) => ({ toasts: [...u.toasts.slice(-3), { id, text, actionLabel, action }] }));
+  // Leave cleanly: mark it leaving (it eases out), then remove it once the exit has played.
+  const exitMs = Math.round(130 / Math.max(0.25, getS()?.settings?.motionSpeed ?? 1));
+  setTimeout(() => setUi((u) => ({ toasts: u.toasts.map((t) => (t.id === id ? { ...t, leaving: true } : t)) })), Math.max(0, ms - exitMs));
   setTimeout(() => setUi((u) => ({ toasts: u.toasts.filter((t) => t.id !== id) })), ms);
 }
 

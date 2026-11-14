@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { ID, Item } from '@shared/types';
 import * as ops from '@shared/ops';
-import { formatShortcut } from '@shared/shortcuts';
 import { act, setUi, useKite } from '../store';
-import { actions, openUrl } from '../commands';
-import { isMac, now } from '../platform';
+import { openUrl } from '../commands';
+import { now } from '../platform';
 import { WebSurface } from './WebSurface';
-import { KiteLogo } from './KiteLogo';
 import { setupPage, usePolicySync } from '../pageSetup';
 import { FindBar } from './FindBar';
 import { SplitChrome, splitRects, paneStyle } from './SplitView';
@@ -15,6 +13,8 @@ import { Peek } from './Peek';
 import { DropZone } from '../dnd';
 import { partitionForTab } from '@shared/profiles';
 import { LoadError } from './LoadError';
+import { StartPage } from './StartPage';
+import { isNewTabUrl } from '@shared/url';
 import { SettingsPanel } from './Settings';
 import { PanelGuard } from './Panels';
 
@@ -32,14 +32,17 @@ export function Stage() {
   });
   const loaded = useMemo(() => loadedRaw.filter((id) => items[id]?.kind === 'tab'), [loadedRaw, items]);
   const settingsPage = useKite((st) => (st.ui.panel === 'settings' ? st.ui.panelArg ?? 'appearance' : st.ui.panel === 'shortcuts' ? 'keys' : null));
-  // Going to another tab (or a new one, or another Space) leaves Settings, like leaving a page.
-  const lastActive = useRef(activeId);
+  // Going to another tab (or a new one) leaves Settings, like leaving a page. Switching
+  // Space keeps it open, so each Space can be styled from Settings.
+  const spaceId = useKite((st) => st.s.activeSpaceId);
+  const last = useRef({ activeId, spaceId });
   useEffect(() => {
-    if (lastActive.current === activeId) return;
-    lastActive.current = activeId;
+    const before = last.current;
+    last.current = { activeId, spaceId };
+    if (before.activeId === activeId || before.spaceId !== spaceId) return;
     const p = useKite.getState().ui.panel;
     if (p === 'settings' || p === 'shortcuts') setUi({ panel: null, panelArg: undefined });
-  }, [activeId]);
+  }, [activeId, spaceId]);
 
   const rects = useMemo<Record<ID, Rect>>(() => {
     if (!active) return {};
@@ -60,11 +63,11 @@ export function Stage() {
         ))}
         {active?.kind === 'split' && <SplitChrome split={active} />}
         {active?.kind === 'note' && <NoteEditor key={active.id} note={active} />}
-        {!active && <EmptyState />}
+        {!active && <StartPage />}
         <FindBar />
         {settingsPage && (
-          <PanelGuard key={settingsPage}>
-            <SettingsPanel initial={settingsPage} />
+          <PanelGuard key="settings">
+            <SettingsPanel />
           </PanelGuard>
         )}
       </DropZone>
@@ -87,6 +90,9 @@ function SurfaceSlot({ id, rect, focusedInSplit, inSplit }: { id: ID; rect?: Rec
     : undefined;
   return (
     <div className="surface-slot" data-visible={visible || undefined} data-focused={focusedInSplit || undefined} data-split={inSplit || undefined} style={style} data-testid={`slot-${id}`}>
+      {isNewTabUrl(item.url) ? (
+        visible && <StartPage tabId={id} />
+      ) : (
       <WebSurface
         key={partition}
         partition={partition}
@@ -112,28 +118,9 @@ function SurfaceSlot({ id, rect, focusedInSplit, inSplit }: { id: ID; rect?: Rec
           if (it?.kind === 'split' && it.panes.includes(id) && it.panes[it.focused] !== id) act((d) => ops.select(d, id, now()));
         }}
       />
+      )}
       {error && visible && <LoadError id={id} error={error} />}
     </div>
   );
 }
 
-function EmptyState() {
-  const sc = useKite((st) => st.s.settings.shortcuts);
-  return (
-    <div className="empty" data-testid="empty-state">
-      <div className="empty-mark">
-        <KiteLogo size={64} />
-      </div>
-      <h1 className="empty-title">Where to?</h1>
-      <button className="empty-search" data-testid="empty-search" onClick={actions.commandBar}>
-        Search or type a URL
-        <kbd>{formatShortcut(sc.commandBar, isMac)}</kbd>
-      </button>
-      <div className="empty-hints">
-        <span><kbd>{formatShortcut(sc.newNote, isMac)}</kbd> New note</span>
-        <span><kbd>{formatShortcut(sc.toggleSidebar, isMac)}</kbd> Hide sidebar</span>
-        <span><kbd>{formatShortcut(sc.settings, isMac)}</kbd> Settings</span>
-      </div>
-    </div>
-  );
-}
